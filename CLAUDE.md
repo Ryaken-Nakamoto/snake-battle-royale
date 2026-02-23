@@ -75,15 +75,20 @@ Cannot reverse direction (no SOUTH from NORTH, etc.).
 
 ## Human Controls
 
-| Key | Action |
-|-----|--------|
-| `A` | Turn left |
-| `D` | Turn right |
-| `W` | Boost straight |
-| `Space` (hold) | Boost in current direction |
-| No key | Go straight |
-| `P` | Pause / unpause |
-| `ESC` | Quit |
+Keys map to **absolute directions** — which two keys are active depends on the snake's current orientation:
+
+| Situation | Key | Effect |
+|-----------|-----|--------|
+| Moving East or West | `W` | Turn North |
+| Moving East or West | `S` | Turn South |
+| Moving North or South | `A` | Turn West |
+| Moving North or South | `D` | Turn East |
+| Any | `Space` (hold) | Boost in current direction |
+| Any | No key | Go straight |
+| Any | `P` | Pause / unpause |
+| Any | `ESC` | Quit |
+
+Pressing the key for the opposite direction (reversing) is ignored — the snake continues straight.
 
 ---
 
