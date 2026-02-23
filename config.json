@@ -1,0 +1,13 @@
+{
+    "grid_size": 300,
+    "tile_size": 1000,
+    "num_snakes": 5,
+    "initial_snake_length": 3,
+    "apple_density": 50,
+    "win_length": 50,
+    "boost_multiplier": 2.0,
+    "max_stamina_factor": 1.0,
+    "stamina_recovery_factor": 1.0,
+    "stamina_drain_rate": 1.0,
+    "fps": 10
+}
