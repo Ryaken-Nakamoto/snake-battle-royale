@@ -2,13 +2,22 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+import math
+from typing import TYPE_CHECKING, NamedTuple
 
 import pygame
 
 if TYPE_CHECKING:
     from config import GameConfig
     from game import Game
+
+
+class _Viewport(NamedTuple):
+    tile: int
+    cam_x: int
+    cam_y: int
+    view_w: int
+    view_h: int
 
 
 # Maximum window dimensions (the grid is scaled to fit within this)
@@ -47,6 +56,26 @@ class Renderer:
         self.big_font = pygame.font.SysFont("monospace", 32, bold=True)
         self.med_font = pygame.font.SysFont("monospace", 18)
 
+    def _compute_viewport(self, game: Game) -> _Viewport:
+        """Compute viewport for rendering, with optional scoped view."""
+        if not self.config.limit_scope:
+            return _Viewport(self.tile, 0, 0, self.config.grid_size, self.config.grid_size)
+
+        human = next((s for s in game.snakes if s.snake_id == self.human_snake_id and s.alive), None)
+        if human is None:
+            return _Viewport(self.tile, 0, 0, self.config.grid_size, self.config.grid_size)
+
+        radius = 7 + math.floor(math.sqrt(human.length))
+        diameter = 2 * radius + 1
+        side = min(self.win_w, self.win_h - self.hud_height)
+        dyn_tile = max(1, side // diameter)
+
+        hx, hy = human.head
+        cam_x = max(0, min(hx - radius, self.config.grid_size - diameter))
+        cam_y = max(0, min(hy - radius, self.config.grid_size - diameter))
+
+        return _Viewport(dyn_tile, cam_x, cam_y, diameter, diameter)
+
     def _grid_rect(self, x: int, y: int) -> pygame.Rect:
         return pygame.Rect(
             x * self.tile,
@@ -58,9 +87,10 @@ class Renderer:
     # -- main draw ------------------------------------------------------------
 
     def draw(self, game: Game, paused: bool = False) -> None:
+        vp = self._compute_viewport(game)
         self.screen.fill(self.BACKGROUND)
-        self._draw_apples(game)
-        self._draw_snakes(game)
+        self._draw_apples(game, vp)
+        self._draw_snakes(game, vp)
         self._draw_hud(game)
 
         if paused:
@@ -72,17 +102,15 @@ class Renderer:
 
     # -- components -----------------------------------------------------------
 
-    def _draw_apples(self, game: Game) -> None:
-        t = self.tile
-        hud = self.hud_height
+    def _draw_apples(self, game: Game, vp: _Viewport) -> None:
         for ax, ay in game.grid.apples:
-            px = ax * t
-            py = ay * t + hud
-            self.screen.fill(self.APPLE_COLOR, (px, py, t, t))
+            if not (vp.cam_x <= ax < vp.cam_x + vp.view_w and vp.cam_y <= ay < vp.cam_y + vp.view_h):
+                continue
+            px = (ax - vp.cam_x) * vp.tile
+            py = (ay - vp.cam_y) * vp.tile + self.hud_height
+            self.screen.fill(self.APPLE_COLOR, (px, py, vp.tile, vp.tile))
 
-    def _draw_snakes(self, game: Game) -> None:
-        t = self.tile
-        hud = self.hud_height
+    def _draw_snakes(self, game: Game, vp: _Viewport) -> None:
         for snake in game.snakes:
             if not snake.alive:
                 continue
@@ -90,21 +118,23 @@ class Renderer:
             col = snake.color
 
             for i, (sx, sy) in enumerate(snake.positions):
-                px = sx * t
-                py = sy * t + hud
-                rect = pygame.Rect(px, py, t, t)
+                if not (vp.cam_x <= sx < vp.cam_x + vp.view_w and vp.cam_y <= sy < vp.cam_y + vp.view_h):
+                    continue
+                px = (sx - vp.cam_x) * vp.tile
+                py = (sy - vp.cam_y) * vp.tile + self.hud_height
+                rect = pygame.Rect(px, py, vp.tile, vp.tile)
                 pygame.draw.rect(self.screen, col, rect)
 
                 if i == 0:
                     # Brighter head
                     highlight = tuple(min(255, c + 70) for c in col)
-                    inner = rect.inflate(-max(2, t // 3), -max(2, t // 3))
+                    inner = rect.inflate(-max(2, vp.tile // 3), -max(2, vp.tile // 3))
                     pygame.draw.rect(self.screen, highlight, inner)
                     if is_human:
                         # Gold triangle marker above head
                         cx = rect.centerx
                         cy = rect.top - 1
-                        size = max(3, t // 2)
+                        size = max(3, vp.tile // 2)
                         pygame.draw.polygon(
                             self.screen,
                             (255, 215, 0),

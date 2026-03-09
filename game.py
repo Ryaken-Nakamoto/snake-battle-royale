@@ -55,7 +55,7 @@ class Game:
     def _spawn_snakes(self) -> None:
         """Spawn all snakes at random, non-overlapping, wall-safe positions."""
         min_dist = 5
-        safety_margin = 3
+        safety_margin = 10
         occupied: set[Pos] = set()
         heads: list[Pos] = []
         directions = list(Direction)

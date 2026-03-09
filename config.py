@@ -24,6 +24,7 @@ class GameConfig:
     stamina_recovery_factor: float
     stamina_drain_rate: float
     fps: int
+    limit_scope: bool = False
 
     @property
     def total_tiles(self) -> int:
