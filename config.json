@@ -1,5 +1,5 @@
 {
-    "grid_size": 300,
+    "grid_size": 50,
     "tile_size": 1000,
     "num_snakes": 5,
     "initial_snake_length": 3,

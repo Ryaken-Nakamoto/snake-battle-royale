@@ -310,3 +310,10 @@ class Game:
         # Also end if no snakes alive
         if not any(s.alive for s in self.snakes):
             self.game_over = True
+
+
+    def get_grid(self) -> Grid:
+        return self.grid
+
+    def get_snakes(self) -> list[Snake]:
+        return self.snakes

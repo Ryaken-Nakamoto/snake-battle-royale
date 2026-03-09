@@ -75,3 +75,9 @@ class Grid:
         deficit = target - len(self.apples)
         if deficit > 0:
             self.spawn_apples(deficit, snakes)
+
+    def get_apple_positions(self) -> set[Pos]:
+        return self.apples
+    
+    def get_grid_size(self) -> int:
+        return self.size

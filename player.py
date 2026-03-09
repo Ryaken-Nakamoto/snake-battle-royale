@@ -15,9 +15,13 @@ if TYPE_CHECKING:
 
 _KEY_TO_DIR = {
     pygame.K_w: Direction.NORTH,
+    pygame.K_UP: Direction.NORTH,
     pygame.K_s: Direction.SOUTH,
+    pygame.K_DOWN: Direction.SOUTH,
     pygame.K_a: Direction.WEST,
+    pygame.K_LEFT: Direction.WEST,
     pygame.K_d: Direction.EAST,
+    pygame.K_RIGHT: Direction.EAST,
 }
 
 _OPPOSITE = {
