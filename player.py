@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, Any
 
 import pygame
 
-from snake import Action, Direction, turn_left, turn_right
+from snake import Action, Direction, Pos, turn_left, turn_right, apply_turn
 
 if TYPE_CHECKING:
     pass
@@ -30,6 +30,20 @@ _OPPOSITE = {
     Direction.EAST: Direction.WEST,
     Direction.WEST: Direction.EAST,
 }
+
+# helper for the updated "safer" random player
+def _head_after_action(
+    head: Pos,
+    current_dir: Direction,
+    action: Action,
+    boost_multiplier: float = 2.0,
+) -> list[Pos]:
+    """Return all tiles the head would occupy (including intermediate for boost)."""
+    new_dir = apply_turn(current_dir, action)
+    dx, dy = new_dir.value
+    hx, hy = head
+    steps = int(boost_multiplier) if action.is_boost else 1
+    return [(hx + dx * i, hy + dy * i) for i in range(1, steps + 1)]
 
 
 class Player(ABC):
@@ -105,3 +119,52 @@ class HumanPlayer(Player):
             }[base]
 
         return base
+    
+class SafeRandomPlayer(Player):
+    """
+    Picks a random action each tick, but filters out moves that would
+    immediately cause self-collision or walk into a wall.
+ 
+    Safety checks (in priority order):
+      1. Wall collision  — any new head tile is out of bounds
+      2. Self collision  — any new head tile hits this snake's own body
+      3. Body collision  — any new head tile hits another alive snake's body
+    """
+ 
+    def __init__(self) -> None:
+         self.snake_id = None
+
+
+    def get_action(self, game_state: dict[str, Any]) -> Action:
+        grid_size: int = game_state["grid_size"]
+        snakes: list[dict] = game_state["snakes"]
+ 
+        # Find this player's snake — match by the first alive snake whose
+        # get_action is being called. 
+
+        my_id: int = getattr(self, "snake_id", None)
+ 
+        my_snake = next((s for s in snakes if s["id"] == my_id and s["alive"]), None)
+        if my_snake is None:
+            return Action.STRAIGHT
+ 
+        head: Pos = my_snake["positions"][0]
+        direction: Direction = my_snake["direction"]
+        body_set: set[Pos] = set(my_snake["positions"][1:])  # exclude head
+ 
+        def is_safe(action: Action) -> bool:
+            tiles = _head_after_action(head, direction, action)
+            for tile in tiles:
+                x, y = tile
+                if not (0 <= x < grid_size and 0 <= y < grid_size):
+                    return False
+                if tile in body_set:
+                    return False
+            return True
+ 
+        safe_actions = [a for a in Action if is_safe(a)]
+        # fall back, act like random snake
+        if not safe_actions:
+            return random.choice(list(Action))
+ 
+        return random.choice(safe_actions)

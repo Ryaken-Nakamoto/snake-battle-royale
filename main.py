@@ -8,7 +8,7 @@ import pygame
 
 from config import load_config
 from game import Game
-from player import HumanPlayer, Player, RandomPlayer
+from player import HumanPlayer, Player, SafeRandomPlayer
 from renderer import Renderer
 from data import get_grid_data
 
@@ -18,9 +18,11 @@ def build_players(num_snakes: int, human_index: int = 0) -> list[Player]:
     players: list[Player] = []
     for i in range(num_snakes):
         if i == human_index:
-            players.append(HumanPlayer())
+           player = HumanPlayer()
         else:
-            players.append(RandomPlayer())
+            player = SafeRandomPlayer()
+            player.snake_id = i # snakes can find themselves in game state and avoid self collisions
+        players.append(player)
     return players
 
 
