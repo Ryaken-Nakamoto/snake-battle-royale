@@ -9,5 +9,6 @@
     "max_stamina_factor": 1.0,
     "stamina_recovery_factor": 1.0,
     "stamina_drain_rate": 1.0,
-    "fps": 10
+    "fps": 10,
+    "limit_scope": true
 }
