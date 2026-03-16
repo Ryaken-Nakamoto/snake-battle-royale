@@ -252,7 +252,7 @@ class Game:
                 intermediate = new_heads_map[snake.snake_id][0]  # first tile passed through
                 for other in alive_snakes:
                     if other.snake_id == snake.snake_id:
-                        if intermediate in body_tiles[other.snake_id]:
+                        if intermediate in set(other.positions[2:]):
                             dead_ids.add(snake.snake_id)
                             break
                     else:

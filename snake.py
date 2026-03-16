@@ -149,7 +149,7 @@ class Snake:
         self.direction = apply_turn(self.direction, action)
 
         # Insert new heads at the front
-        for h in reversed(new_heads):
+        for h in new_heads:
             self.positions.insert(0, h)
 
         # Remove from tail: we added len(new_heads) segments, remove same minus grow
