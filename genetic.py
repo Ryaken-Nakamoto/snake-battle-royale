@@ -23,7 +23,7 @@ MUTATION_RATE = 0.1        # probability of mutating each gene
 MUTATION_STRENGTH = 0.2    # how much a mutated gene shifts (±)
 CROSSOVER_RATE = 0.7       # probability of doing crossover vs. cloning
 ELITISM_COUNT = 2          # top N genomes carried unchanged to next gen
-GAMES_PER_GENOME = 3       # run multiple games and average for stable fitness
+GAMES_PER_GENOME = 3       # run multiple games per generation and average fitness for stability
 
 CSV_OUTPUT_PATH = os.path.join("results", "genetic_results.csv")
 
@@ -38,31 +38,30 @@ class GeneticPlayer(Player):
     def get_action(self, game_state: dict[str, Any]) -> Action:
         return self._fallback.get_action(game_state)
 
-# Runs one or more headless games for the given genome and returns an average fitness score.
-# TODO edit what fitness means? rn it is just the final snake length
-def evaluate_fitness(genome: list[float], config_path: str = "config.json") -> float:
-
+# Runs GAMES_PER_GENOME games for each genome and averages the snake length as fitness.
+def evaluate_population(
+    population: list[list[float]], config_path: str = "config.json"
+) -> list[float]:
+    
     config = load_config(config_path)
+    assert len(population) == config.num_snakes, (
+        f"POPULATION_SIZE ({len(population)}) must equal "
+        f"config.num_snakes ({config.num_snakes})"
+    )
 
-    total_fitness = 0.0
-    for _ in range(GAMES_PER_GENOME):
-        genetic_player = GeneticPlayer(genome)
+    total_fitnesses = [0.0] * len(population)
 
-        players: list[Player] = [genetic_player] + [
-            RandomPlayer() for _ in range(config.num_snakes - 1)
-        ]
-
+    for j in range(GAMES_PER_GENOME):
+        players: list[Player] = [GeneticPlayer(g) for g in population]
         game = Game(config, players)
 
         while not game.game_over:
             game.progress_game()
 
-        our_snake = game.snakes[0]
-        fitness = float(our_snake.length)  # change this if editing what fitness means
+        for i, snake in enumerate(game.snakes):
+            total_fitnesses[i] += float(snake.length)
 
-        total_fitness += fitness
-
-    return total_fitness / GAMES_PER_GENOME
+    return [f / GAMES_PER_GENOME for f in total_fitnesses]
 
 
 def random_genome() -> list[float]:
@@ -130,10 +129,7 @@ def genetic(
 
     for generation in range(1, NUM_GENERATIONS + 1):
 
-        # Evaluate every genome in the current population
-        fitnesses: list[float] = [
-            evaluate_fitness(genome, config_path) for genome in population
-        ]
+        fitnesses: list[float] = evaluate_population(population, config_path)
 
         gen_best_idx = fitnesses.index(max(fitnesses))
         if fitnesses[gen_best_idx] > best_ever_fitness:
