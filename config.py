@@ -25,6 +25,8 @@ class GameConfig:
     stamina_drain_rate: float
     fps: int
     limit_scope: bool = False
+    max_moves_flag: bool = False
+    max_moves: int = 1
 
     @property
     def total_tiles(self) -> int:
@@ -42,6 +44,8 @@ class GameConfig:
             raise ValueError("num_snakes must be at least 1")
         if self.initial_snake_length < 1:
             raise ValueError("initial_snake_length must be at least 1")
+        if self.max_moves < 1:
+            raise ValueError("max_moves must be at least 1")
 
         tiles_for_apples = self.initial_apple_count
         tiles_for_snakes = self.num_snakes * self.initial_snake_length

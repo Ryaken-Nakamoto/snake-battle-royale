@@ -63,8 +63,7 @@ def main() -> None:
         renderer.draw(game, paused)
         clock.tick(config.fps)
         for i in range(len(game.players)):
-            features = get_features(game, i)
-            print(str(features))
+            features = get_features(game.get_game_state(), i)
 
 
 if __name__ == "__main__":

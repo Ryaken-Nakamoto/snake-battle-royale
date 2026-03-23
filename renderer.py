@@ -185,15 +185,20 @@ class Renderer:
             self.screen.blit(sub, sub.get_rect(center=(self.win_w // 2, self.win_h // 2 + 20)))
 
     def _draw_win_screen(self, game: Game) -> None:
-        if game.winners:
+        if game.max_moves_exceeded:
+            title = "MAX MOVES EXCEEDED"
+            subtitle = f"Reached {game.tick} moves"
+        elif game.winners:
             if len(game.winners) == 1:
                 title = f"{game.winners[0].name} WINS!"
             else:
                 names = ", ".join(w.name for w in game.winners)
                 title = f"TIE: {names}"
+            subtitle = "ESC to quit"
         else:
             title = "ALL SNAKES DEAD"
-        self._draw_overlay(title, "ESC to quit")
+            subtitle = "ESC to quit"
+        self._draw_overlay(title, subtitle)
 
     def cleanup(self) -> None:
         pygame.quit()
