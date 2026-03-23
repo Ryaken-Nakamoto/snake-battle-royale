@@ -10,7 +10,7 @@ from config import load_config
 from game import Game
 from player import HumanPlayer, Player, SafeRandomPlayer
 from renderer import Renderer
-from data import get_grid_data
+from data import get_grid_data, get_features
 
 
 def build_players(num_snakes: int, human_index: int = 0) -> list[Player]:
@@ -62,9 +62,9 @@ def main() -> None:
 
         renderer.draw(game, paused)
         clock.tick(config.fps)
-        data = get_grid_data(game)
-        for row in data:
-            print("".join(f"{item:<2}" for item in row))
+        for i in range(len(game.players)):
+            features = get_features(game, i)
+            print(str(features))
 
 
 if __name__ == "__main__":

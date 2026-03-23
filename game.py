@@ -133,6 +133,7 @@ class Game:
             "grid_size": self.config.grid_size,
             "tick": self.tick,
             "apples": list(self.grid.apples),
+            "win_length": self.config.win_length,
             "snakes": [
                 {
                     "id": s.snake_id,

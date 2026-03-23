@@ -9,11 +9,9 @@ from config import load_config
 from game import Game
 from player import Player, RandomPlayer
 from snake import Action
+from data import get_features
 
-# TODO: decide what the genome actually encodes (a weight for each feature?)
-# rn it is just a placeholder list of floats
-
-GENOME_LENGTH = 16  # TODO: set to match updated representation
+GENOME_LENGTH = 30  #weight for each feature in turn and boost factors, + 1 bias per
 
 #could be moved into config.json?
 
@@ -27,16 +25,44 @@ GAMES_PER_GENOME = 3       # run multiple games per generation and average fitne
 
 CSV_OUTPUT_PATH = os.path.join("results", "genetic_results.csv")
 
-#TODO: implement get_action() so it actually uses the genome list and produces a real decision. 
-# For now it just falls back to RandomPlayer.
+
 class GeneticPlayer(Player):
 
-    def __init__(self, genome: list[float]) -> None:
+    def __init__(self, player_id: int, genome: list[float]) -> None:
         self.genome = genome
+        self.player_id = player_id
         self._fallback = RandomPlayer()
 
     def get_action(self, game_state: dict[str, Any]) -> Action:
-        return self._fallback.get_action(game_state)
+        features = get_features(game_state, self.player_id)
+        if not features:
+            return self._fallback.get_action(game_state)
+
+        n = len(features)
+        # genome[0:n]: weights for turn score  (negative=left, positive=right)
+        # genome[n:2n]: weights for boost score (positive=boost)
+        turn_score  = sum(self.genome[i]     * features[i] for i in range(n))
+        boost_score = sum(self.genome[n + i] * features[i] for i in range(n))
+        turn_score += self.genome[2*n]
+        boost_score += self.genome[2*n + 1]
+
+        if turn_score < -0.33:
+            action = Action.TURN_LEFT
+        elif turn_score > 0.33:
+            action = Action.TURN_RIGHT
+        else:
+            action = Action.STRAIGHT
+
+        if boost_score > 0:
+            action = {
+                Action.STRAIGHT:   Action.BOOST_STRAIGHT,
+                Action.TURN_LEFT:  Action.BOOST_LEFT,
+                Action.TURN_RIGHT: Action.BOOST_RIGHT,
+            }[action]
+
+        return action
+
+    
 
 # Runs GAMES_PER_GENOME games for each genome and averages the snake length as fitness.
 def evaluate_population(
@@ -52,7 +78,7 @@ def evaluate_population(
     total_fitnesses = [0.0] * len(population)
 
     for j in range(GAMES_PER_GENOME):
-        players: list[Player] = [GeneticPlayer(g) for g in population]
+        players: list[Player] = [GeneticPlayer(id, genome) for id, genome in enumerate(population)]
         game = Game(config, players)
 
         while not game.game_over:
