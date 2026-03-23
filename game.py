@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import math
 import random
 from typing import Any
@@ -10,6 +11,8 @@ from config import GameConfig
 from grid import Grid
 from player import Player
 from snake import Action, Direction, Pos, Snake
+
+logger = logging.getLogger(__name__)
 
 SNAKE_NAMES = ["Viper", "Cobra", "Python", "Mamba", "Rattler", "Sidewinder", "Adder", "Taipan"]
 
@@ -46,6 +49,7 @@ class Game:
         self.tick = 0
         self.winners: list[Snake] = []
         self.game_over = False
+        self.max_moves_exceeded = False
 
         self._spawn_snakes()
         self.grid.spawn_apples(config.initial_apple_count, self.snakes)
@@ -133,6 +137,7 @@ class Game:
             "grid_size": self.config.grid_size,
             "tick": self.tick,
             "apples": list(self.grid.apples),
+            "win_length": self.config.win_length,
             "snakes": [
                 {
                     "id": s.snake_id,
@@ -161,6 +166,14 @@ class Game:
             return
 
         self.tick += 1
+
+        # Check if max moves exceeded
+        if self.config.max_moves_flag and self.tick > self.config.max_moves:
+            logger.info(f"Max moves exceeded: {self.tick} > {self.config.max_moves}. Game short-circuited.")
+            self.max_moves_exceeded = True
+            self.game_over = True
+            return
+
         state = self.get_game_state()
 
         # 1. Collect actions
