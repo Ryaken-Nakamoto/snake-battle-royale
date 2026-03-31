@@ -11,6 +11,6 @@
     "stamina_drain_rate": 1.0,
     "fps": 10,
     "limit_scope": false,
-    "max_moves_flag": false,
+    "max_moves_flag": true,
     "max_moves": 500
 }
