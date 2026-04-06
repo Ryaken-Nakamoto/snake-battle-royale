@@ -211,6 +211,14 @@ class Game:
                 continue
             new_heads_map[snake.snake_id] = snake.compute_new_heads(actions[snake.snake_id])
 
+        # 3b. Snapshot body positions BEFORE moving (for collision checks)
+        pre_move_bodies: dict[int, list[Pos]] = {}
+        for snake in self.snakes:
+            if not snake.alive:
+                continue
+            pre_move_bodies[snake.snake_id] = list(snake.positions)
+
+
         # 4. Move all snakes
         for snake in self.snakes:
             if not snake.alive:
@@ -250,26 +258,32 @@ class Game:
             # Check against all snakes' bodies (including own tail)
             for other in alive_snakes:
                 if other.snake_id == snake.snake_id:
-                    # Self collision: head in own body
-                    if head in body_tiles[other.snake_id]:
+                    steps = len(new_heads_map[snake.snake_id])
+                    pre_body = pre_move_bodies[snake.snake_id]
+                    exposed_body = set(pre_body[1 : len(pre_body) - steps])
+                    if head in exposed_body:
                         dead_ids.add(snake.snake_id)
                         break
                 else:
-                    # Hit other snake's body (any segment including head-body overlap)
-                    if head in set(other.positions):
+                    # Use pre-move body of the other snake here too
+                    pre_body = pre_move_bodies[other.snake_id]
+                    if head in set(pre_body):
                         dead_ids.add(snake.snake_id)
                         break
 
             # Also check intermediate tiles for boost moves
             if snake.snake_id not in dead_ids and len(new_heads_map[snake.snake_id]) > 1:
-                intermediate = new_heads_map[snake.snake_id][0]  # first tile passed through
+                intermediate = new_heads_map[snake.snake_id][0]
                 for other in alive_snakes:
+                    pre_body = pre_move_bodies[other.snake_id]
                     if other.snake_id == snake.snake_id:
-                        if intermediate in set(other.positions[2:]):
+                        steps = len(new_heads_map[snake.snake_id])
+                        exposed_body = pre_body[1 : len(pre_body) - steps]
+                        if intermediate in set(exposed_body):
                             dead_ids.add(snake.snake_id)
                             break
                     else:
-                        if intermediate in set(other.positions):
+                        if intermediate in set(pre_body):  # already using pre_body here
                             dead_ids.add(snake.snake_id)
                             break
 
