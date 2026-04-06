@@ -258,16 +258,16 @@ class Game:
             # Check against all snakes' bodies (including own tail)
             for other in alive_snakes:
                 if other.snake_id == snake.snake_id:
-                    pre_body = pre_move_bodies[snake.snake_id]
                     steps = len(new_heads_map[snake.snake_id])
-                    # Tail segments that vacated this tick are safe to move into
+                    pre_body = pre_move_bodies[snake.snake_id]
                     exposed_body = set(pre_body[1 : len(pre_body) - steps])
                     if head in exposed_body:
                         dead_ids.add(snake.snake_id)
                         break
                 else:
-                    # Hit other snake's body (any segment including head-body overlap)
-                    if head in set(other.positions):
+                    # Use pre-move body of the other snake here too
+                    pre_body = pre_move_bodies[other.snake_id]
+                    if head in set(pre_body):
                         dead_ids.add(snake.snake_id)
                         break
 
@@ -277,16 +277,13 @@ class Game:
                 for other in alive_snakes:
                     pre_body = pre_move_bodies[other.snake_id]
                     if other.snake_id == snake.snake_id:
-                        # Exclude head (index 0) and tail segments that will vacate.
-                        # Steps moved = len(new_heads), so last `steps` tiles will be gone.
                         steps = len(new_heads_map[snake.snake_id])
                         exposed_body = pre_body[1 : len(pre_body) - steps]
                         if intermediate in set(exposed_body):
                             dead_ids.add(snake.snake_id)
                             break
                     else:
-                        # For other snakes, they've also moved, use their post-move positions
-                        if intermediate in set(other.positions):
+                        if intermediate in set(pre_body):  # already using pre_body here
                             dead_ids.add(snake.snake_id)
                             break
 
