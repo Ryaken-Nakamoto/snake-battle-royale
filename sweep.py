@@ -12,6 +12,20 @@ from typing import Any
 import matplotlib.pyplot as plt
 import numpy as np
 
+from neural_network import Neural_Network, Basic_Neural_Network, Two_Layer_Neural_Network, Base_algorithm
+
+NN_REGISTRY: dict[str, type[Neural_Network]] = {
+    "Basic_Neural_Network":     Basic_Neural_Network,
+    "Two_Layer_Neural_Network": Two_Layer_Neural_Network,
+    "Base_algorithm":           Base_algorithm,
+}
+
+
+def _resolve_nn_class(name: str) -> type[Neural_Network]:
+    if name not in NN_REGISTRY:
+        raise ValueError(f"Unknown nn_class {name!r}. Valid: {list(NN_REGISTRY)}")
+    return NN_REGISTRY[name]
+
 
 # Step-size helpers
 def arange_param(start: float, stop: float, step: float) -> list[float]:
@@ -77,6 +91,10 @@ def load_sweep_config(path: str = "sweep_config.json") -> dict:
         k: _expand_param_values(v)
         for k, v in cfg["param_grid"].items()
     }
+
+    # Resolve nn_class string to actual class
+    if "nn_class" in cfg:
+        cfg["nn_class"] = _resolve_nn_class(cfg["nn_class"])
 
     return cfg
 
@@ -155,6 +173,7 @@ class GeneticGridSearch:
         results_dir: str = "results/sweep",
         output: dict | None = None,
         verbose: bool = True,
+        nn_class: type[Neural_Network] | None = None,
     ) -> None:
         self.param_grid  = param_grid
         self.config_path = config_path
@@ -163,6 +182,7 @@ class GeneticGridSearch:
         self.results_dir = results_dir
         self.output      = output or {}
         self.verbose     = verbose
+        self.nn_class    = nn_class
 
         # Populated after fit()
         self.cv_results_:   list[dict]  = []
@@ -187,11 +207,12 @@ class GeneticGridSearch:
             results_dir = cfg.get("results_dir", "results/sweep"),
             output      = cfg.get("output", {}),
             verbose     = cfg.get("verbose", True),
+            nn_class    = cfg.get("nn_class"),
         )
 
     def fit(self) -> "GeneticGridSearch":
         """Run all parameter combinations. Populates cv_results_ etc."""
-        from genetic import genetic  
+        from genetic import genetic, plot_fitness
 
         grid  = ParameterGrid(self.param_grid)
         total = len(grid)
@@ -212,12 +233,22 @@ class GeneticGridSearch:
                 csv_path = os.path.join(self.results_dir, f"{run_name}_results.csv")
 
                 t0          = time.perf_counter()
+                call_params = dict(params)
+                if self.nn_class is not None:
+                    call_params["nn_class"] = self.nn_class
                 best_genome = genetic(
                     config_path=self.config_path,
                     csv_path=csv_path,
-                    **params,
+                    **call_params,
                 )
                 elapsed = time.perf_counter() - t0
+
+                plot_path = os.path.join(
+                    "graphs", "sweep", f"{run_name}_fitness.png"
+                )
+                os.makedirs(os.path.dirname(plot_path), exist_ok=True)
+                plot_fitness(csv_path=csv_path, plot_path=plot_path,
+                             hyperparams=params, exp_name=run_name)
 
                 score = self._read_best_fitness(csv_path)
                 scores.append(score)

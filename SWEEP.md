@@ -60,6 +60,7 @@ results/sweep/                ← per-run internal CSVs (not for analysis)
 | `n_repeats` | int | Runs per candidate — results are averaged to reduce noise |
 | `results_dir` | string | Directory for internal per-run CSVs |
 | `verbose` | bool | Print progress to stdout |
+| `nn_class` | string | Neural network architecture. One of: `Basic_Neural_Network`, `Two_Layer_Neural_Network`, `Base_algorithm`. Defaults to `Basic_Neural_Network`. |
 
 ### `param_grid`
 

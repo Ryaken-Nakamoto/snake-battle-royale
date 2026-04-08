@@ -12,7 +12,14 @@ from player import HumanPlayer, Player, SafeRandomPlayer
 from renderer import Renderer
 from genetic import GeneticPlayer, load_previous_weights
 from data import get_features
+from neural_network import Neural_Network, Basic_Neural_Network, Two_Layer_Neural_Network, Base_algorithm
 import csv
+
+NN_REGISTRY: dict[str, type[Neural_Network]] = {
+    "Basic_Neural_Network":     Basic_Neural_Network,
+    "Two_Layer_Neural_Network": Two_Layer_Neural_Network,
+    "Base_algorithm":           Base_algorithm,
+}
 
 # build snakes that make random actions
 def build_players(num_snakes: int, human_index: int = 0) -> list[Player]:
@@ -28,14 +35,15 @@ def build_players(num_snakes: int, human_index: int = 0) -> list[Player]:
     return players
 
 # build snakes that make decisions based on prev found weights
-def build_genetic_players(num_snakes: int, genome: list[float], human_index: int | None = None) -> list[Player]:
+def build_genetic_players(num_snakes: int, genome: list[float], human_index: int | None = None,
+                           nn_class: type[Neural_Network] = Basic_Neural_Network) -> list[Player]:
     """Create the player list: all GeneticPlayers sharing one genome, with optional HumanPlayer."""
     players: list[Player] = []
     for i in range(num_snakes):
         if i == human_index:
             player = HumanPlayer()
         else:
-            player = GeneticPlayer(i, genome)
+            player = GeneticPlayer(i, genome, nn_class)
         players.append(player)
     return players
 
@@ -46,8 +54,9 @@ def main(create_human: bool, genetic_game: bool, weight_path: str | None = None)
 
     # use snakes trained by the generic algorithm
     if genetic_game:
-        genome = load_previous_weights(weight_path)
-        players = build_genetic_players(config.num_snakes, genome, human_index)
+        genome, nn_name = load_previous_weights(weight_path)
+        nn_class = NN_REGISTRY.get(nn_name, Basic_Neural_Network) if nn_name else Basic_Neural_Network
+        players = build_genetic_players(config.num_snakes, genome, human_index, nn_class)
     # use SafeRandom player snakes 
     else:
         players = build_players(config.num_snakes, human_index)
