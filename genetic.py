@@ -97,7 +97,6 @@ def evaluate_population(
 def random_genome(length: int) -> list[float]:
     return [random.uniform(-1.0, 1.0) for _ in range(length)]
 
-#TODO: different crossover strategy?
 def crossover(parent_a: list[float], parent_b: list[float], *, crossover_rate: float, genome_length: int) -> list[float]:
     if random.random() > crossover_rate:
         return list(parent_a)  # clone
@@ -112,14 +111,11 @@ def mutate(genome: list[float], *, mutation_rate: float, mutation_strength: floa
         for gene in genome
     ]
 
-#TODO: this uses touranment selection might want to change?
 def select_parent(population: list[list[float]], fitnesses: list[float]) -> list[float]:
     a, b = random.sample(range(len(population)), 2)
     return population[a] if fitnesses[a] >= fitnesses[b] else population[b]
 
 
-
-# TODO: add more columns if needed
 def _init_csv(path: str) -> None:
     os.makedirs(os.path.dirname(path), exist_ok=True)
     with open(path, "w", newline="") as f:
