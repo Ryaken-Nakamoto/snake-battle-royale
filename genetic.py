@@ -17,13 +17,13 @@ GENOME_LENGTH = 30  #weight for each feature in turn and boost factors, + 1 bias
 
 #could be moved into config.json?
 
-POPULATION_SIZE = 20       # number of genomes per generation
-NUM_GENERATIONS = 10       # how many generations to run
-MUTATION_RATE = 0.1        # probability of mutating each gene
-MUTATION_STRENGTH = 0.2    # how much a mutated gene shifts (±)
-CROSSOVER_RATE = 0.7       # probability of doing crossover vs. cloning
-ELITISM_COUNT = 2          # top N genomes carried unchanged to next gen
-GAMES_PER_GENOME = 3       # run multiple games per generation and average fitness for stability
+POPULATION_SIZE = 50       # number of genomes per generation
+NUM_GENERATIONS = 30       # how many generations to run
+MUTATION_RATE = 0.15        # probability of mutating each gene
+MUTATION_STRENGTH = 0.25    # how much a mutated gene shifts (±)
+CROSSOVER_RATE = 0.8       # probability of doing crossover vs. cloning
+ELITISM_COUNT = 3         # top N genomes carried unchanged to next gen
+GAMES_PER_GENOME = 5       # run multiple games per generation and average fitness for stability
 
 RESULTS_DIR = "results"
 GRAPHS_DIR = "graphs"

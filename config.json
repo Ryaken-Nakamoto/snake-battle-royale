@@ -1,16 +1,16 @@
 {
     "grid_size": 200,
     "tile_size": 1000,
-    "num_snakes": 20,
+    "num_snakes": 50,
     "initial_snake_length": 3,
-    "apple_density": 50,
+    "apple_density": 100,
     "win_length": 50,
-    "boost_multiplier": 5.0,
+    "boost_multiplier": 7.0,
     "max_stamina_factor": 1.0,
     "stamina_recovery_factor": 1.0,
     "stamina_drain_rate": 1.0,
     "fps": 10,
     "limit_scope": false,
     "max_moves_flag": true,
-    "max_moves": 500
+    "max_moves": 1000
 }
