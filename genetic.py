@@ -192,7 +192,7 @@ def genetic(
     # Save best genome weights
     os.makedirs(WEIGHTS_DIR, exist_ok=True)
     weights_path = os.path.join(WEIGHTS_DIR, os.path.basename(os.path.splitext(csv_path)[0]) + "_weights.csv")
-    save_genome(best_genome, weights_path)
+    save_genome(best_genome, weights_path, nn_class)
     print(f"[genetic] Weights saved to: {weights_path}")
 
     return best_genome
@@ -224,7 +224,7 @@ def resume_training(
     Returns:
         Best genome found after continued training
     """
-    seed_genome = load_previous_weights(weight_path)
+    seed_genome, loaded_nn_name = load_previous_weights(weight_path)
     genome_length = len(seed_genome)
 
     print(f"[resume_training] Seeding population from: {weight_path}")
@@ -286,7 +286,7 @@ def resume_training(
     print(f"\n[resume_training] Done. Best fitness: {best_ever_fitness:.4f}")
 
     weights_path = os.path.join(WEIGHTS_DIR, f"{experiment_name}_results_weights.csv")
-    save_genome(best_genome, weights_path)
+    save_genome(best_genome, weights_path, nn_class)
     print(f"[resume_training] Weights saved to: {weights_path}")
 
     hyperparams = {
@@ -305,7 +305,7 @@ def resume_training(
     return best_genome
 
 
-def save_genome(genome: list[float], csv_path: str) -> None:
+def save_genome(genome: list[float], csv_path: str, nn_class: type[Neural_Network] | None = None) -> None:
     """Save a genome (list of weights) to a CSV file.
 
     Args:
@@ -315,9 +315,15 @@ def save_genome(genome: list[float], csv_path: str) -> None:
     os.makedirs(os.path.dirname(csv_path), exist_ok=True)
     with open(csv_path, "w", newline="") as f:
         writer = csv.writer(f)
-        writer.writerow(["weight"])
-        for weight in genome:
-            writer.writerow([weight])
+        if nn_class is not None:
+            writer.writerow(["weight", "nn_class"])
+            writer.writerow([genome[0], nn_class.__name__])
+            for weight in genome[1:]:
+                writer.writerow([weight])
+        else:
+            writer.writerow(["weight"])
+            for weight in genome:
+                writer.writerow([weight])
 
 
 def plot_fitness(csv_path: str, plot_path: str, *, hyperparams: dict, exp_name: str = "Genetic Algorithm") -> None:
@@ -380,15 +386,25 @@ def plot_fitness(csv_path: str, plot_path: str, *, hyperparams: dict, exp_name: 
     fig.savefig(plot_path, dpi=150)
     plt.close(fig)
 
-def load_previous_weights(weight_path: str) -> list[float]:
-    """Load a genome from a previously saved weights CSV."""
-    genome = []
+def load_previous_weights(weight_path: str) -> tuple[list[float], str | None]:
+    """Load a genome from a previously saved weights CSV.
+
+    Returns
+    -------
+    (genome, nn_class_name)
+        nn_class_name is the class name string if stored in the file, else None.
+    """
+    genome: list[float] = []
+    nn_class_name: str | None = None
     with open(f"weights/{weight_path}", "r", newline="") as f:
         reader = csv.DictReader(f)
         for row in reader:
             genome.append(float(row["weight"]))
-    print(f"[load_previous_weights] Loaded {len(genome)} weights from {weight_path}")
-    return genome
+            if nn_class_name is None and "nn_class" in row:
+                nn_class_name = row["nn_class"]
+    print(f"[load_previous_weights] Loaded {len(genome)} weights from {weight_path}"
+          + (f" (nn_class={nn_class_name})" if nn_class_name else ""))
+    return genome, nn_class_name
 
 
 def run_experiments(

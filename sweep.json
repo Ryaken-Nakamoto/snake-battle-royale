@@ -1,4 +1,5 @@
 {
+  "nn_class": "Basic_Neural_Network",
   "n_repeats": 2,
   "results_dir": "results/sweep",
   "verbose": true,
@@ -9,8 +10,8 @@
   },
 
   "base_params": {
-    "population_size":  5,
-    "num_generations":  1,
+    "population_size":  50,
+    "num_generations":  5,
     "crossover_rate":   0.8,
     "elitism_count":    3,
     "games_per_genome": 3
