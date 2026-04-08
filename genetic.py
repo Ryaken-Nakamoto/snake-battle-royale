@@ -11,9 +11,10 @@ from player import Player, RandomPlayer
 from snake import Action
 from data import get_features
 import matplotlib.pyplot as plt
+from neural_network import Neural_Network, Basic_Neural_Network, Two_Layer_Neural_Network, Base_algorithm, N_FEATURES
 
 
-GENOME_LENGTH = 30  #weight for each feature in turn and boost factors, + 1 bias per
+GENOME_LENGTH = Two_Layer_Neural_Network.genome_length(N_FEATURES)  # switch based on which nn class u r using
 
 #could be moved into config.json?
 
@@ -32,9 +33,10 @@ WEIGHTS_DIR = "weights"
 
 class GeneticPlayer(Player):
 
-    def __init__(self, player_id: int, genome: list[float]) -> None:
+    def __init__(self, player_id: int, genome: list[float], nn_class: type[Neural_Network] = Basic_Neural_Network) -> None:
         self.genome = genome
         self.player_id = player_id
+        self.neural_network = nn_class(genome)
         self._fallback = RandomPlayer()
 
     def get_action(self, game_state: dict[str, Any]) -> Action:
@@ -42,35 +44,17 @@ class GeneticPlayer(Player):
         if not features:
             return self._fallback.get_action(game_state)
 
-        n = len(features)
-        # genome[0:n]: weights for turn score  (negative=left, positive=right)
-        # genome[n:2n]: weights for boost score (positive=boost)
-        turn_score  = sum(self.genome[i]     * features[i] for i in range(n))
-        boost_score = sum(self.genome[n + i] * features[i] for i in range(n))
-        turn_score += self.genome[2*n]
-        boost_score += self.genome[2*n + 1]
-
-        if turn_score < -0.33:
-            action = Action.TURN_LEFT
-        elif turn_score > 0.33:
-            action = Action.TURN_RIGHT
-        else:
-            action = Action.STRAIGHT
-
-        if boost_score > 0:
-            action = {
-                Action.STRAIGHT:   Action.BOOST_STRAIGHT,
-                Action.TURN_LEFT:  Action.BOOST_LEFT,
-                Action.TURN_RIGHT: Action.BOOST_RIGHT,
-            }[action]
-
-        return action
+        return self.neural_network.get_action(features)
 
     
 
 # Runs games_per_genome games for each genome and averages the snake length as fitness.
 def evaluate_population(
-    population: list[list[float]], config_path: str = "config.json", *, games_per_genome: int
+    population: list[list[float]],
+    config_path: str = "config.json",
+    *,
+    games_per_genome: int,
+    nn_class: type[Neural_Network] = Basic_Neural_Network,
 ) -> list[float]:
 
     config = load_config(config_path)
@@ -82,7 +66,7 @@ def evaluate_population(
     total_fitnesses = [0.0] * len(population)
 
     for j in range(games_per_genome):
-        players: list[Player] = [GeneticPlayer(id, genome) for id, genome in enumerate(population)]
+        players: list[Player] = [GeneticPlayer(i, genome, nn_class) for i, genome in enumerate(population)]
         game = Game(config, players)
 
         while not game.game_over:
@@ -142,6 +126,7 @@ def genetic(
     config_path: str = "config.json",
     csv_path: str = "results/default_results.csv",
     *,
+    nn_class: type[Neural_Network] = Basic_Neural_Network,
     population_size: int = POPULATION_SIZE,
     num_generations: int = NUM_GENERATIONS,
     mutation_rate: float = MUTATION_RATE,
@@ -149,9 +134,13 @@ def genetic(
     crossover_rate: float = CROSSOVER_RATE,
     elitism_count: int = ELITISM_COUNT,
     games_per_genome: int = GAMES_PER_GENOME,
-    genome_length: int = GENOME_LENGTH,
+    genome_length: int | None = None,
 ) -> list[float]:
+    if genome_length is None:
+        genome_length = nn_class.genome_length(N_FEATURES)
+
     print(f"[genetic] Starting — {num_generations} generations × {population_size} genomes")
+    print(f"[genetic] nn={nn_class.__name__}  genome_length={genome_length}")
     print(f"[genetic] Results will be saved to: {csv_path}\n")
 
     _init_csv(csv_path)
@@ -164,7 +153,7 @@ def genetic(
 
     for generation in range(1, num_generations + 1):
 
-        fitnesses: list[float] = evaluate_population(population, config_path, games_per_genome=games_per_genome)
+        fitnesses: list[float] = evaluate_population(population, config_path, games_per_genome=games_per_genome, nn_class=nn_class)
 
         gen_best_idx = fitnesses.index(max(fitnesses))
         if fitnesses[gen_best_idx] > best_ever_fitness:
@@ -288,6 +277,7 @@ def run_experiments(
     experiments_path: str = "experiments.json",
     config_path: str = "config.json",
     results_dir: str = RESULTS_DIR,
+    nn_class: type[Neural_Network] = Basic_Neural_Network,
 ) -> None:
     """Run a sequence of genetic algorithm experiments with different hyperparameters.
 
@@ -328,7 +318,7 @@ def run_experiments(
         print(f"\n[run_experiments] Starting experiment {i}: {name}")
 
         # Run genetic algorithm
-        genetic(config_path=config_path, csv_path=csv_path, **hyperparams)
+        genetic(config_path=config_path, csv_path=csv_path, nn_class=nn_class, **hyperparams)
 
         # Plot the results
         os.makedirs(GRAPHS_DIR, exist_ok=True)
@@ -348,7 +338,8 @@ if __name__ == "__main__":
         csv_path = "results/default_results.csv"
         os.makedirs(GRAPHS_DIR, exist_ok=True)
         plot_path = os.path.join(GRAPHS_DIR, "default_fitness.png")
-        best = genetic(csv_path=csv_path)
+        nn = Basic_Neural_Network
+        best = genetic(csv_path=csv_path, nn_class=nn)
         plot_fitness(
             csv_path=csv_path,
             plot_path=plot_path,
@@ -360,7 +351,7 @@ if __name__ == "__main__":
                 "crossover_rate": CROSSOVER_RATE,
                 "elitism_count": ELITISM_COUNT,
                 "games_per_genome": GAMES_PER_GENOME,
-                "genome_length": GENOME_LENGTH,
+                "genome_length": nn.genome_length(N_FEATURES),
             },
             exp_name="Default Run",
         )
