@@ -68,12 +68,20 @@ def evaluate_population(
     for j in range(games_per_genome):
         players: list[Player] = [GeneticPlayer(i, genome, nn_class) for i, genome in enumerate(population)]
         game = Game(config, players)
+        prev_alive = [True] * len(population)
+        tick_died = [0] * len(population)
 
         while not game.game_over:
             game.progress_game()
+            for i, snake in enumerate(game.snakes):
+                if prev_alive[i] and not snake.alive:
+                    tick_died[i] = game.tick
+                    prev_alive[i] = False
 
+        final_tick = game.tick
         for i, snake in enumerate(game.snakes):
-            total_fitnesses[i] += float(snake.length)
+            t = tick_died[i] if tick_died[i] > 0 else final_tick
+            total_fitnesses[i] += float(snake.length) * t
 
     return [f / games_per_genome for f in total_fitnesses]
 
@@ -250,7 +258,7 @@ def plot_fitness(csv_path: str, plot_path: str, *, hyperparams: dict, exp_name: 
 
     # Labels and legend
     ax.set_xlabel("Generation", fontsize=12)
-    ax.set_ylabel("Fitness (avg snake length)", fontsize=12)
+    ax.set_ylabel("Fitness (length × ticks alive)", fontsize=12)
     ax.set_title(f"{exp_name} — Fitness over Generations", fontsize=14, fontweight="bold")
     ax.legend(loc="lower right", fontsize=10)
     ax.grid(True, alpha=0.3)

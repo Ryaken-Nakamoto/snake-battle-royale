@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 from snake import Action
 
-N_FEATURES = 14  # output length of get_features() in data.py
+N_FEATURES = 17  # output length of get_features() in data.py
 
 
 class Neural_Network(ABC):

@@ -20,13 +20,14 @@ def get_grid_data(game : Game) -> list[list[int]]:
     return gridData
 
 
-# Gets features, retuns a list of 14 normalized values:
+# Gets features, returns a list of 17 normalized values:
 #   0-3: 2 closest apples as (forward, right) in local frame, normalized
 #   4-6: wall distance in straight/left/right, normalized
 #   7-9: nearest body distance in straight/left/right, normalized
 #   10: stamina / max_stamina
 #   11: length / win_length
 #   12-13: closest enemy head as (forward, right) in local frame, normalized
+#   14-16: immediate danger flags (1=danger, 0=safe) for straight/left/right
 def get_features(game_state: dict, player_id: int) -> list[float]:
     grid_size: int = game_state["grid_size"]
 
@@ -77,7 +78,7 @@ def get_features(game_state: dict, player_id: int) -> list[float]:
             if body_d is None and (x, y) in occupied:
                 body_d = wall_d
         wall_dists.append(wall_d / grid_size)
-        body_dists.append((body_d if body_d is not None else wall_d) / grid_size)
+        body_dists.append(body_d / grid_size if body_d is not None else 1.0)
 
     # stamina and length
     stamina_norm = snake_data["stamina"] / snake_data["max_stamina"] if snake_data["max_stamina"] > 0 else 0.0
@@ -91,4 +92,12 @@ def get_features(game_state: dict, player_id: int) -> list[float]:
         ex, ey = closest["positions"][0]
         enemy_features = list(to_local(ex - hx, ey - hy))
 
-    return apple_features + wall_dists + body_dists + [stamina_norm, length_norm] + enemy_features
+    # immediate danger: is the very next tile in each direction a wall or body?
+    danger_flags: list[float] = []
+    for d in [heading, turn_left(heading), turn_right(heading)]:
+        dx, dy = d.value
+        nx, ny = hx + dx, hy + dy
+        is_danger = not (0 <= nx < grid_size and 0 <= ny < grid_size) or (nx, ny) in occupied
+        danger_flags.append(1.0 if is_danger else 0.0)
+
+    return apple_features + wall_dists + body_dists + [stamina_norm, length_norm] + enemy_features + danger_flags
