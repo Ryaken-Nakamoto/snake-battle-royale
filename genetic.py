@@ -18,13 +18,13 @@ GENOME_LENGTH = Two_Layer_Neural_Network.genome_length(N_FEATURES)  # switch bas
 
 #could be moved into config.json?
 
-POPULATION_SIZE = 100       # number of genomes per generation
-NUM_GENERATIONS = 1000       # how many generations to run
-MUTATION_RATE = 0.1        # probability of mutating each gene
-MUTATION_STRENGTH = 0.2    # how much a mutated gene shifts (±)
-CROSSOVER_RATE = 0.7       # probability of doing crossover vs. cloning
-ELITISM_COUNT = 10          # top N genomes carried unchanged to next gen
-GAMES_PER_GENOME = 3       # run multiple games per generation and average fitness for stability
+POPULATION_SIZE = 50       # number of genomes per generation
+NUM_GENERATIONS = 30       # how many generations to run
+MUTATION_RATE = 0.15        # probability of mutating each gene
+MUTATION_STRENGTH = 0.25    # how much a mutated gene shifts (±)
+CROSSOVER_RATE = 0.8       # probability of doing crossover vs. cloning
+ELITISM_COUNT = 3         # top N genomes carried unchanged to next gen
+GAMES_PER_GENOME = 5       # run multiple games per generation and average fitness for stability
 
 RESULTS_DIR = "results"
 GRAPHS_DIR = "graphs"
@@ -81,7 +81,6 @@ def evaluate_population(
 def random_genome(length: int) -> list[float]:
     return [random.uniform(-1.0, 1.0) for _ in range(length)]
 
-#TODO: different crossover strategy?
 def crossover(parent_a: list[float], parent_b: list[float], *, crossover_rate: float, genome_length: int) -> list[float]:
     if random.random() > crossover_rate:
         return list(parent_a)  # clone
@@ -96,14 +95,11 @@ def mutate(genome: list[float], *, mutation_rate: float, mutation_strength: floa
         for gene in genome
     ]
 
-#TODO: this uses touranment selection might want to change?
 def select_parent(population: list[list[float]], fitnesses: list[float]) -> list[float]:
     a, b = random.sample(range(len(population)), 2)
     return population[a] if fitnesses[a] >= fitnesses[b] else population[b]
 
 
-
-# TODO: add more columns if needed
 def _init_csv(path: str) -> None:
     os.makedirs(os.path.dirname(path), exist_ok=True)
     with open(path, "w", newline="") as f:
