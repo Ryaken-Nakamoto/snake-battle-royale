@@ -20,14 +20,6 @@ class Neural_Network(ABC):
 
 
 class Basic_Neural_Network(Neural_Network):
-    """Single linear layer: genome encodes turn weights, boost weights, and 2 biases.
-
-    Genome layout (length = 2*n + 2):
-        genome[0:n]      — turn weights
-        genome[n:2n]     — boost weights
-        genome[2n]       — turn bias
-        genome[2n + 1]   — boost bias
-    """
 
     @staticmethod
     def genome_length(n_features: int = N_FEATURES) -> int:
@@ -61,14 +53,6 @@ class Basic_Neural_Network(Neural_Network):
 
 
 class Two_Layer_Neural_Network(Neural_Network):
-    """Two-layer feedforward network: input → hidden (ReLU) → output.
-
-    Genome layout (length = n*h + h + h*2 + 2):
-        W1: n*h weights  (input → hidden)
-        b1: h biases     (hidden layer)
-        W2: h*2 weights  (hidden → output: turn, boost)
-        b2: 2 biases     (output layer)
-    """
 
     HIDDEN_SIZE = 8
 
@@ -118,18 +102,8 @@ class Two_Layer_Neural_Network(Neural_Network):
 
 
 class Base_algorithm(Neural_Network):
-    """Genome-independent baseline: steers toward the nearest apple, avoids walls/bodies.
 
-    The genome is unused — this exists so it conforms to the Neural_Network interface
-    and can be plugged into GeneticPlayer as a fixed baseline for comparison.
-
-    Feature indices used (from data.py get_features):
-        0,1   — closest apple (forward, right) in local frame, normalized
-        4,5,6 — wall distance (straight, left, right), normalized
-        7,8,9 — nearest body distance (straight, left, right), normalized
-    """
-
-    DANGER = 0.05  # normalized distance considered unsafe (~15 tiles on a 300-grid)
+    DANGER = 0.05  # tunable, higher -> more risky moves
 
     @staticmethod
     def genome_length(_n_features: int = N_FEATURES) -> int:
