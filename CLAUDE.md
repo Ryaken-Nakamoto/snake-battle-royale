@@ -4,7 +4,23 @@
 
 **Snake Battle Royale** is a multiplayer snake game built with Python + Pygame. One human player competes against AI-controlled snakes on a shared grid. The first snake to reach the configured `win_length` (default 50 segments) wins.
 
-Run with: `python main.py`
+There's a few ways to play this game! 🐍 🍎
+
+# Method 1 — 1 human player vs AI snakes
+python main.py --prev-weights weight_path.csv human
+
+Load in previous weights and see if you can beat the AI controlled snakes!
+
+# Case 2 — all AI snakes, no human players
+python main.py --prev-weights weight_path.csv
+
+See the glorious AI snakes play each other! 🐍🤖
+
+# Case 3 — human vs SafeRandom snakes
+python main.py
+
+Play against snakes that make random moves. To prevent these snakes from dying too quickly, they will avoid
+making any random moves that immeadiately cause them to die. 
 
 ---
 

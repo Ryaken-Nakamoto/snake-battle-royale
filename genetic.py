@@ -1,5 +1,5 @@
 from __future__ import annotations
-
+import sys
 import csv
 import os
 import random
@@ -12,6 +12,7 @@ from snake import Action
 from data import get_features
 import matplotlib.pyplot as plt
 from neural_network import Neural_Network, Basic_Neural_Network, Two_Layer_Neural_Network, Base_algorithm, N_FEATURES
+from datetime import datetime
 
 
 GENOME_LENGTH = Two_Layer_Neural_Network.genome_length(N_FEATURES)  # switch based on which nn class u r using
@@ -196,6 +197,113 @@ def genetic(
 
     return best_genome
 
+def resume_training(
+    weight_path: str,
+    config_path: str = "config.json",
+    experiment_name: str = "resumed",
+    *,
+    nn_class: type[Neural_Network] = Basic_Neural_Network,
+    population_size: int = POPULATION_SIZE,
+    num_generations: int = NUM_GENERATIONS,
+    mutation_rate: float = MUTATION_RATE,
+    mutation_strength: float = MUTATION_STRENGTH,
+    crossover_rate: float = CROSSOVER_RATE,
+    elitism_count: int = ELITISM_COUNT,
+    games_per_genome: int = GAMES_PER_GENOME,
+) -> list[float]:
+    """Resume training from a previously saved genome, seeding the population with it.
+
+    The saved genome is placed at index 0; the rest of the population is generated
+    by mutating copies of it, giving evolution a head-start from a known good solution.
+
+    Args:
+        weight_path: Path to the saved weights CSV
+        config_path: Path to game config JSON
+        experiment_name: Name used for output file paths
+
+    Returns:
+        Best genome found after continued training
+    """
+    seed_genome = load_previous_weights(weight_path)
+    genome_length = len(seed_genome)
+
+    print(f"[resume_training] Seeding population from: {weight_path}")
+    print(f"[resume_training] Genome length: {genome_length}")
+
+    # Seed population: keep the original + mutated variants of it
+    population: list[list[float]] = [seed_genome]
+    while len(population) < population_size:
+        mutated = mutate(
+            seed_genome,
+            mutation_rate=mutation_rate,
+            mutation_strength=mutation_strength,
+        )
+        population.append(mutated)
+
+    csv_path = os.path.join(RESULTS_DIR, f"{experiment_name}_results.csv")
+    plot_path = os.path.join(GRAPHS_DIR, f"{experiment_name}_fitness.png")
+
+    os.makedirs(RESULTS_DIR, exist_ok=True)
+    os.makedirs(GRAPHS_DIR, exist_ok=True)
+    _init_csv(csv_path)
+
+    best_genome = seed_genome
+    best_ever_fitness = float("-inf")
+
+    for generation in range(1, num_generations + 1):
+        fitnesses = evaluate_population(
+            population,
+            config_path,
+            games_per_genome=games_per_genome,
+            nn_class=nn_class,
+        )
+
+        gen_best_idx = fitnesses.index(max(fitnesses))
+        if fitnesses[gen_best_idx] > best_ever_fitness:
+            best_ever_fitness = fitnesses[gen_best_idx]
+            best_genome = list(population[gen_best_idx])
+
+        _log_generation(csv_path, generation, fitnesses)
+
+        print(
+            f"Gen {generation:>4}/{num_generations} | "
+            f"best={max(fitnesses):.2f}  avg={sum(fitnesses)/len(fitnesses):.2f}  "
+            f"worst={min(fitnesses):.2f}"
+        )
+
+        ranked = sorted(range(len(population)), key=lambda i: fitnesses[i], reverse=True)
+        next_population: list[list[float]] = [list(population[ranked[i]]) for i in range(elitism_count)]
+
+        while len(next_population) < population_size:
+            parent_a = select_parent(population, fitnesses)
+            parent_b = select_parent(population, fitnesses)
+            child = crossover(parent_a, parent_b, crossover_rate=crossover_rate, genome_length=genome_length)
+            child = mutate(child, mutation_rate=mutation_rate, mutation_strength=mutation_strength)
+            next_population.append(child)
+
+        population = next_population
+
+    print(f"\n[resume_training] Done. Best fitness: {best_ever_fitness:.4f}")
+
+    weights_path = os.path.join(WEIGHTS_DIR, f"{experiment_name}_results_weights.csv")
+    save_genome(best_genome, weights_path)
+    print(f"[resume_training] Weights saved to: {weights_path}")
+
+    hyperparams = {
+        "population_size": population_size,
+        "num_generations": num_generations,
+        "mutation_rate": mutation_rate,
+        "mutation_strength": mutation_strength,
+        "crossover_rate": crossover_rate,
+        "elitism_count": elitism_count,
+        "games_per_genome": games_per_genome,
+        "genome_length": genome_length,
+    }
+    plot_fitness(csv_path=csv_path, plot_path=plot_path, hyperparams=hyperparams, exp_name=experiment_name)
+    print(f"[resume_training] Plot saved to: {plot_path}")
+
+    return best_genome
+
 
 def save_genome(genome: list[float], csv_path: str) -> None:
     """Save a genome (list of weights) to a CSV file.
@@ -272,6 +380,16 @@ def plot_fitness(csv_path: str, plot_path: str, *, hyperparams: dict, exp_name: 
     fig.savefig(plot_path, dpi=150)
     plt.close(fig)
 
+def load_previous_weights(weight_path: str) -> list[float]:
+    """Load a genome from a previously saved weights CSV."""
+    genome = []
+    with open(f"weights/{weight_path}", "r", newline="") as f:
+        reader = csv.DictReader(f)
+        for row in reader:
+            genome.append(float(row["weight"]))
+    print(f"[load_previous_weights] Loaded {len(genome)} weights from {weight_path}")
+    return genome
+
 
 def run_experiments(
     experiments_path: str = "experiments.json",
@@ -330,10 +448,16 @@ def run_experiments(
 
 
 if __name__ == "__main__":
-    import sys
-
+    time = datetime.now()
     if "--sweep" in sys.argv:
         run_experiments()
+    # --prev-weights "weight_csv.path" "config_path" "{experiment_name}"
+    elif "--prev-weights" in sys.argv:
+        idx = sys.argv.index("--prev-weights")
+        weight_path = sys.argv[idx + 1]
+        config_path = sys.argv[idx + 2] if len(sys.argv) > idx + 2 else "config.json"
+        exp_name    = sys.argv[idx + 3] if len(sys.argv) > idx + 3 else f"experiment_{time.strftime("%Y-%m-%d_%H:%M:%S:")}"
+        resume_training(weight_path, config_path, exp_name)
     else:
         csv_path = "results/default_results.csv"
         os.makedirs(GRAPHS_DIR, exist_ok=True)
