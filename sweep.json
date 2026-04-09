@@ -1,26 +1,28 @@
 {
-  "nn_class": "Basic_Neural_Network",
-  "n_repeats": 2,
-  "results_dir": "results/sweep",
-  "verbose": true,
+  "nn_class":    "Basic_Neural_Network",
+  "n_repeats":   2,
+  "verbose":     true,
+
+  "run_name":    "Initial-Sweep",
+  "prev_weights": null,
+  "abbreviations": null,
 
   "param_grid": {
     "mutation_rate":     {"arange": [0.05, 0.30, 0.05]},
-    "mutation_strength": {"arange": [0.10, 0.40, 0.10]}
+    "mutation_strength": {"arange": [0.10, 0.50, 0.10]},
+    "crossover_rate":    [0.5, 0.7, 0.9]
   },
 
   "base_params": {
-    "population_size":  50,
-    "num_generations":  5,
-    "crossover_rate":   0.8,
+    "population_size":  25,
+    "num_generations":  3,
     "elitism_count":    3,
     "games_per_genome": 3
   },
 
   "output": {
-    "results_csv": "results/sweep_results.csv",
-    "plot_path":   "graphs/sweep_heatmap.png",
     "x_param":     "mutation_rate",
-    "y_param":     "mutation_strength"
+    "y_param":     "mutation_strength",
+    "facet_param": "crossover_rate"
   }
 }

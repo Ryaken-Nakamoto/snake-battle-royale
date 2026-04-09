@@ -19,7 +19,7 @@ GENOME_LENGTH = Two_Layer_Neural_Network.genome_length(N_FEATURES)  # switch bas
 
 #could be moved into config.json?
 
-POPULATION_SIZE = 50       # number of genomes per generation
+POPULATION_SIZE = 25       # number of genomes per generation
 NUM_GENERATIONS = 30       # how many generations to run
 MUTATION_RATE = 0.15        # probability of mutating each gene
 MUTATION_STRENGTH = 0.25    # how much a mutated gene shifts (±)
@@ -136,6 +136,8 @@ def genetic(
     elitism_count: int = ELITISM_COUNT,
     games_per_genome: int = GAMES_PER_GENOME,
     genome_length: int | None = None,
+    prev_weights: str | None = None,
+    weights_path: str | None = None,
 ) -> list[float]:
     if genome_length is None:
         genome_length = nn_class.genome_length(N_FEATURES)
@@ -146,8 +148,16 @@ def genetic(
 
     _init_csv(csv_path)
 
-    # Generation 0: random population
-    population: list[list[float]] = [random_genome(genome_length) for _ in range(population_size)]
+    # Generation 0: seed from prev_weights or random
+    if prev_weights is not None:
+        seed_genome, _ = load_previous_weights(prev_weights)
+        genome_length = len(seed_genome)
+        print(f"[genetic] Seeding population from: {prev_weights}")
+        population: list[list[float]] = [seed_genome]
+        while len(population) < population_size:
+            population.append(mutate(seed_genome, mutation_rate=mutation_rate, mutation_strength=mutation_strength))
+    else:
+        population: list[list[float]] = [random_genome(genome_length) for _ in range(population_size)]
 
     best_genome: list[float] = population[0]
     best_ever_fitness: float = float("-inf")
@@ -190,8 +200,9 @@ def genetic(
     print(f"[genetic] CSV saved to: {csv_path}")
 
     # Save best genome weights
-    os.makedirs(WEIGHTS_DIR, exist_ok=True)
-    weights_path = os.path.join(WEIGHTS_DIR, os.path.basename(os.path.splitext(csv_path)[0]) + "_weights.csv")
+    if weights_path is None:
+        os.makedirs(WEIGHTS_DIR, exist_ok=True)
+        weights_path = os.path.join(WEIGHTS_DIR, os.path.basename(os.path.splitext(csv_path)[0]) + "_weights.csv")
     save_genome(best_genome, weights_path, nn_class)
     print(f"[genetic] Weights saved to: {weights_path}")
 
@@ -312,7 +323,7 @@ def save_genome(genome: list[float], csv_path: str, nn_class: type[Neural_Networ
         genome: List of float weights
         csv_path: Path where to save the genome CSV
     """
-    os.makedirs(os.path.dirname(csv_path), exist_ok=True)
+    os.makedirs(os.path.dirname(csv_path) or ".", exist_ok=True)
     with open(csv_path, "w", newline="") as f:
         writer = csv.writer(f)
         if nn_class is not None:
@@ -389,6 +400,8 @@ def plot_fitness(csv_path: str, plot_path: str, *, hyperparams: dict, exp_name: 
 def load_previous_weights(weight_path: str) -> tuple[list[float], str | None]:
     """Load a genome from a previously saved weights CSV.
 
+    Accepts either a bare filename (legacy: looked up in weights/) or a full/relative path.
+
     Returns
     -------
     (genome, nn_class_name)
@@ -396,7 +409,9 @@ def load_previous_weights(weight_path: str) -> tuple[list[float], str | None]:
     """
     genome: list[float] = []
     nn_class_name: str | None = None
-    with open(f"weights/{weight_path}", "r", newline="") as f:
+    if not os.path.isabs(weight_path) and not os.path.exists(weight_path):
+        weight_path = os.path.join("weights", weight_path)
+    with open(weight_path, "r", newline="") as f:
         reader = csv.DictReader(f)
         for row in reader:
             genome.append(float(row["weight"]))
