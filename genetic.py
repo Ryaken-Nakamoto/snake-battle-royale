@@ -12,6 +12,7 @@ from snake import Action
 from data import get_features
 import matplotlib.pyplot as plt
 from neural_network import Neural_Network, Basic_Neural_Network, Two_Layer_Neural_Network, Base_algorithm, N_FEATURES
+from fitness import FitnessFunction, LengthFitness
 from datetime import datetime
 
 
@@ -49,14 +50,18 @@ class GeneticPlayer(Player):
 
     
 
-# Runs games_per_genome games for each genome and averages the snake length as fitness.
+# Runs games_per_genome games for each genome and averages the fitness score.
 def evaluate_population(
     population: list[list[float]],
     config_path: str = "config.json",
     *,
     games_per_genome: int,
     nn_class: type[Neural_Network] = Basic_Neural_Network,
-) -> list[float]:
+    fitness_function: FitnessFunction | None = None,
+) -> tuple[list[float], list[float]]:
+
+    if fitness_function is None:
+        fitness_function = LengthFitness()
 
     config = load_config(config_path)
     assert len(population) == config.num_snakes, (
@@ -65,6 +70,7 @@ def evaluate_population(
     )
 
     total_fitnesses = [0.0] * len(population)
+    total_lengths = [0.0] * len(population)
 
     for j in range(games_per_genome):
         players: list[Player] = [GeneticPlayer(i, genome, nn_class) for i, genome in enumerate(population)]
@@ -74,9 +80,12 @@ def evaluate_population(
             game.progress_game()
 
         for i, snake in enumerate(game.snakes):
-            total_fitnesses[i] += float(snake.length)
+            total_fitnesses[i] += fitness_function.score(snake, game)
+            total_lengths[i] += float(snake.length)
 
-    return [f / games_per_genome for f in total_fitnesses]
+    fitnesses = [f / games_per_genome for f in total_fitnesses]
+    lengths = [l / games_per_genome for l in total_lengths]
+    return fitnesses, lengths
 
 
 def random_genome(length: int) -> list[float]:
@@ -109,11 +118,14 @@ def _init_csv(path: str) -> None:
             "generation",
             "best_fitness",
             "avg_fitness",
-            "worst_fitness",     
+            "worst_fitness",
+            "best_length",
+            "avg_length",
+            "worst_length",
         ])
 
 
-def _log_generation(path: str, generation: int, fitnesses: list[float]) -> None:
+def _log_generation(path: str, generation: int, fitnesses: list[float], lengths: list[float]) -> None:
     with open(path, "a", newline="") as f:
         writer = csv.writer(f)
         writer.writerow([
@@ -121,6 +133,9 @@ def _log_generation(path: str, generation: int, fitnesses: list[float]) -> None:
             round(max(fitnesses), 4),
             round(sum(fitnesses) / len(fitnesses), 4),
             round(min(fitnesses), 4),
+            round(max(lengths), 4),
+            round(sum(lengths) / len(lengths), 4),
+            round(min(lengths), 4),
         ])
 
 def genetic(
@@ -138,6 +153,7 @@ def genetic(
     genome_length: int | None = None,
     prev_weights: str | None = None,
     weights_path: str | None = None,
+    fitness_function: FitnessFunction | None = None,
 ) -> list[float]:
     if genome_length is None:
         genome_length = nn_class.genome_length(N_FEATURES)
@@ -164,14 +180,14 @@ def genetic(
 
     for generation in range(1, num_generations + 1):
 
-        fitnesses: list[float] = evaluate_population(population, config_path, games_per_genome=games_per_genome, nn_class=nn_class)
+        fitnesses, lengths = evaluate_population(population, config_path, games_per_genome=games_per_genome, nn_class=nn_class, fitness_function=fitness_function)
 
         gen_best_idx = fitnesses.index(max(fitnesses))
         if fitnesses[gen_best_idx] > best_ever_fitness:
             best_ever_fitness = fitnesses[gen_best_idx]
             best_genome = list(population[gen_best_idx])
 
-        _log_generation(csv_path, generation, fitnesses)
+        _log_generation(csv_path, generation, fitnesses, lengths)
 
         print(
             f"Gen {generation:>4}/{num_generations} | "
@@ -221,6 +237,7 @@ def resume_training(
     crossover_rate: float = CROSSOVER_RATE,
     elitism_count: int = ELITISM_COUNT,
     games_per_genome: int = GAMES_PER_GENOME,
+    fitness_function: FitnessFunction | None = None,
 ) -> list[float]:
     """Resume training from a previously saved genome, seeding the population with it.
 
@@ -262,11 +279,12 @@ def resume_training(
     best_ever_fitness = float("-inf")
 
     for generation in range(1, num_generations + 1):
-        fitnesses = evaluate_population(
+        fitnesses, lengths = evaluate_population(
             population,
             config_path,
             games_per_genome=games_per_genome,
             nn_class=nn_class,
+            fitness_function=fitness_function,
         )
 
         gen_best_idx = fitnesses.index(max(fitnesses))
@@ -274,7 +292,7 @@ def resume_training(
             best_ever_fitness = fitnesses[gen_best_idx]
             best_genome = list(population[gen_best_idx])
 
-        _log_generation(csv_path, generation, fitnesses)
+        _log_generation(csv_path, generation, fitnesses, lengths)
 
         print(
             f"Gen {generation:>4}/{num_generations} | "
@@ -310,7 +328,8 @@ def resume_training(
         "games_per_genome": games_per_genome,
         "genome_length": genome_length,
     }
-    plot_fitness(csv_path=csv_path, plot_path=plot_path, hyperparams=hyperparams, exp_name=experiment_name)
+    plot_fitness(csv_path=csv_path, plot_path=plot_path, hyperparams=hyperparams, exp_name=experiment_name,
+                 fitness_fn=type(fitness_function or LengthFitness()).__name__)
     print(f"[resume_training] Plot saved to: {plot_path}")
 
     return best_genome
@@ -337,7 +356,7 @@ def save_genome(genome: list[float], csv_path: str, nn_class: type[Neural_Networ
                 writer.writerow([weight])
 
 
-def plot_fitness(csv_path: str, plot_path: str, *, hyperparams: dict, exp_name: str = "Genetic Algorithm") -> None:
+def plot_fitness(csv_path: str, plot_path: str, *, hyperparams: dict, exp_name: str = "Genetic Algorithm", fitness_fn: str = "LengthFitness") -> None:
     """Plot fitness convergence from a genetic algorithm CSV output.
 
     Args:
@@ -351,6 +370,9 @@ def plot_fitness(csv_path: str, plot_path: str, *, hyperparams: dict, exp_name: 
     avg_fitnesses = []
     best_fitnesses = []
     worst_fitnesses = []
+    avg_lengths = []
+    best_lengths = []
+    worst_lengths = []
 
     with open(csv_path, "r", newline="") as f:
         reader = csv.DictReader(f)
@@ -359,25 +381,25 @@ def plot_fitness(csv_path: str, plot_path: str, *, hyperparams: dict, exp_name: 
             avg_fitnesses.append(float(row["avg_fitness"]))
             best_fitnesses.append(float(row["best_fitness"]))
             worst_fitnesses.append(float(row["worst_fitness"]))
+            avg_lengths.append(float(row["avg_length"]))
+            best_lengths.append(float(row["best_length"]))
+            worst_lengths.append(float(row["worst_length"]))
 
-    # Create plot
-    fig, ax = plt.subplots(figsize=(10, 6))
+    # Create two subplots
+    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(10, 10))
 
-    # Plot avg fitness line
-    ax.plot(generations, avg_fitnesses, linewidth=2, label="avg fitness", color="steelblue")
-
-    # Fill between best/worst band
-    ax.fill_between(generations, worst_fitnesses, best_fitnesses, alpha=0.25, color="steelblue", label="best/worst band")
-
-    # Labels and legend
-    ax.set_xlabel("Generation", fontsize=12)
-    ax.set_ylabel("Fitness (avg snake length)", fontsize=12)
-    ax.set_title(f"{exp_name} — Fitness over Generations", fontsize=14, fontweight="bold")
-    ax.legend(loc="lower right", fontsize=10)
-    ax.grid(True, alpha=0.3)
+    # --- Top subplot: Fitness ---
+    ax1.plot(generations, avg_fitnesses, linewidth=2, label="avg fitness", color="steelblue")
+    ax1.fill_between(generations, worst_fitnesses, best_fitnesses, alpha=0.25, color="steelblue", label="best/worst band")
+    ax1.set_xlabel("Generation", fontsize=12)
+    ax1.set_ylabel("Fitness score", fontsize=12)
+    ax1.set_title(f"{exp_name} — Fitness over Generations", fontsize=14, fontweight="bold")
+    ax1.legend(loc="lower right", fontsize=10)
+    ax1.grid(True, alpha=0.3)
 
     # Build annotation text from hyperparams
     anno_lines = [
+        f"fitness_fn={fitness_fn}",
         f"pop={hyperparams['population_size']:<3}  gens={hyperparams['num_generations']:<3}",
         f"mut_rate={hyperparams['mutation_rate']:<5.2f}  mut_str={hyperparams['mutation_strength']:<5.2f}",
         f"xover={hyperparams['crossover_rate']:<5.2f}  elitism={hyperparams['elitism_count']:<2}",
@@ -385,13 +407,22 @@ def plot_fitness(csv_path: str, plot_path: str, *, hyperparams: dict, exp_name: 
     ]
     anno_text = "\n".join(anno_lines)
 
-    ax.text(
+    ax1.text(
         0.98, 0.98, anno_text,
-        transform=ax.transAxes,
+        transform=ax1.transAxes,
         fontsize=9, fontfamily="monospace",
         verticalalignment="top", horizontalalignment="right",
         bbox=dict(boxstyle="round", facecolor="wheat", alpha=0.8)
     )
+
+    # --- Bottom subplot: Snake Length ---
+    ax2.plot(generations, avg_lengths, linewidth=2, label="avg length", color="seagreen")
+    ax2.fill_between(generations, worst_lengths, best_lengths, alpha=0.25, color="seagreen", label="best/worst band")
+    ax2.set_xlabel("Generation", fontsize=12)
+    ax2.set_ylabel("Snake length (tiles)", fontsize=12)
+    ax2.set_title(f"{exp_name} — Snake Length over Generations", fontsize=14, fontweight="bold")
+    ax2.legend(loc="lower right", fontsize=10)
+    ax2.grid(True, alpha=0.3)
 
     plt.tight_layout()
     fig.savefig(plot_path, dpi=150)

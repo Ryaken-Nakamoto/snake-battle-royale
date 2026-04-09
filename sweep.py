@@ -15,6 +15,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 from neural_network import Neural_Network, Basic_Neural_Network, Two_Layer_Neural_Network, Base_algorithm, N_FEATURES
+from fitness import FitnessFunction, LengthFitness, GrowthEfficiencyFitness
 
 NN_REGISTRY: dict[str, type[Neural_Network]] = {
     "Basic_Neural_Network":     Basic_Neural_Network,
@@ -22,11 +23,22 @@ NN_REGISTRY: dict[str, type[Neural_Network]] = {
     "Base_algorithm":           Base_algorithm,
 }
 
+FITNESS_REGISTRY: dict[str, type[FitnessFunction]] = {
+    "LengthFitness":           LengthFitness,
+    "GrowthEfficiencyFitness": GrowthEfficiencyFitness,
+}
+
 
 def _resolve_nn_class(name: str) -> type[Neural_Network]:
     if name not in NN_REGISTRY:
         raise ValueError(f"Unknown nn_class {name!r}. Valid: {list(NN_REGISTRY)}")
     return NN_REGISTRY[name]
+
+
+def _resolve_fitness_class(name: str) -> type[FitnessFunction]:
+    if name not in FITNESS_REGISTRY:
+        raise ValueError(f"Unknown fitness_function {name!r}. Valid: {list(FITNESS_REGISTRY)}")
+    return FITNESS_REGISTRY[name]
 
 
 # Step-size helpers
@@ -121,6 +133,10 @@ def load_sweep_config(path: str = "sweep_config.json") -> dict:
     if "nn_class" in cfg:
         cfg["nn_class"] = _resolve_nn_class(cfg["nn_class"])
 
+    # Resolve fitness_function string to an instance
+    if "fitness_function" in cfg:
+        cfg["fitness_function"] = _resolve_fitness_class(cfg["fitness_function"])()
+
     return cfg
 
 
@@ -202,18 +218,20 @@ class GeneticGridSearch:
         run_name: str | None = None,
         prev_weights: str | list[str] | None = None,
         abbreviations: dict[str, str] | None = None,
+        fitness_function: FitnessFunction | None = None,
     ) -> None:
-        self.param_grid    = param_grid
-        self.config_path   = config_path
-        self.n_repeats     = n_repeats
-        self.base_params   = base_params or {}
-        self.results_dir   = results_dir
-        self.output        = output or {}
-        self.verbose       = verbose
-        self.nn_class      = nn_class
-        self.run_name      = run_name or f"sweep_{datetime.now().strftime('%Y-%m-%d_%H-%M')}"
-        self.prev_weights  = prev_weights
-        self.abbreviations = abbreviations
+        self.param_grid       = param_grid
+        self.config_path      = config_path
+        self.n_repeats        = n_repeats
+        self.base_params      = base_params or {}
+        self.results_dir      = results_dir
+        self.output           = output or {}
+        self.verbose          = verbose
+        self.nn_class         = nn_class
+        self.run_name         = run_name or f"sweep_{datetime.now().strftime('%Y-%m-%d_%H-%M')}"
+        self.prev_weights     = prev_weights
+        self.abbreviations    = abbreviations
+        self.fitness_function = fitness_function
 
         # Populated after fit()
         self.cv_results_:   list[dict]  = []
@@ -233,17 +251,18 @@ class GeneticGridSearch:
             cfg = cfg_or_path
 
         instance = cls(
-            param_grid    = cfg["param_grid"],
-            config_path   = cfg.get("config_path", "config.json"),
-            n_repeats     = cfg.get("n_repeats", 1),
-            base_params   = cfg.get("base_params", {}),
-            results_dir   = cfg.get("results_dir", "results/sweep"),
-            output        = cfg.get("output", {}),
-            verbose       = cfg.get("verbose", True),
-            nn_class      = cfg.get("nn_class"),
-            run_name      = cfg.get("run_name"),
-            prev_weights  = cfg.get("prev_weights"),
-            abbreviations = cfg.get("abbreviations"),
+            param_grid       = cfg["param_grid"],
+            config_path      = cfg.get("config_path", "config.json"),
+            n_repeats        = cfg.get("n_repeats", 1),
+            base_params      = cfg.get("base_params", {}),
+            results_dir      = cfg.get("results_dir", "results/sweep"),
+            output           = cfg.get("output", {}),
+            verbose          = cfg.get("verbose", True),
+            nn_class         = cfg.get("nn_class"),
+            run_name         = cfg.get("run_name"),
+            prev_weights     = cfg.get("prev_weights"),
+            abbreviations    = cfg.get("abbreviations"),
+            fitness_function = cfg.get("fitness_function"),
         )
 
         # Snapshot the config file into runs/{run_name}/sweep_config.json
@@ -301,6 +320,8 @@ class GeneticGridSearch:
                 call_params = dict(params)
                 if self.nn_class is not None:
                     call_params["nn_class"] = self.nn_class
+                if self.fitness_function is not None:
+                    call_params["fitness_function"] = self.fitness_function
 
                 t0 = time.perf_counter()
                 best_genome = genetic(
@@ -315,7 +336,8 @@ class GeneticGridSearch:
                 nn_cls = self.nn_class if self.nn_class is not None else Two_Layer_Neural_Network
                 plot_params = {**params, "genome_length": nn_cls.genome_length(N_FEATURES)}
                 plot_fitness(csv_path=csv_path, plot_path=plot_path,
-                             hyperparams=plot_params, exp_name=cand_dir_name)
+                             hyperparams=plot_params, exp_name=cand_dir_name,
+                             fitness_fn=type(self.fitness_function or LengthFitness()).__name__)
 
                 score = self._read_best_fitness(csv_path)
                 scores.append(score)

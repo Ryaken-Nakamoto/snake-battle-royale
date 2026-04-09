@@ -37,10 +37,11 @@ runs/
 
 ```json
 {
-  "nn_class":      "Basic_Neural_Network",
-  "config_path":   "config.json",
-  "n_repeats":     2,
-  "verbose":       true,
+  "nn_class":         "Basic_Neural_Network",
+  "fitness_function": "LengthFitness",
+  "config_path":      "config.json",
+  "n_repeats":        2,
+  "verbose":          true,
 
   "run_name":      null,
   "prev_weights":  null,
@@ -72,6 +73,7 @@ runs/
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
 | `nn_class` | string | `"Basic_Neural_Network"` | Architecture to use. One of: `Basic_Neural_Network`, `Two_Layer_Neural_Network`, `Base_algorithm` |
+| `fitness_function` | string \| null | `"LengthFitness"` | Fitness function used to score each snake. See **Fitness Functions** below. |
 | `config_path` | string | `"config.json"` | Game config JSON passed to every `genetic()` call |
 | `n_repeats` | int | `1` | Runs per candidate — scores averaged to reduce noise |
 | `verbose` | bool | `true` | Print progress to stdout |
@@ -115,6 +117,21 @@ Fixed hyperparameters that are **not** being swept. Merged into every `genetic()
 | `facet_param` | For 3-param sweeps: which param to use as panel facets (defaults to the 3rd swept param) |
 
 `x_param` and `y_param` are required when sweeping 2+ params. For single-param sweeps a line plot is generated automatically.
+
+---
+
+## Fitness Functions
+
+The `fitness_function` key selects how each snake is scored after each game. The value must be a string matching one of the registered classes in `fitness.py`.
+
+| Name | Formula | When to use |
+|------|---------|-------------|
+| `LengthFitness` | `snake.length` | Default. Rewards raw growth, straightforward to interpret. |
+| `GrowthEfficiencyFitness` | `snake.length + (growth / ticks) × 10` | Rewards both size and speed of growth. Discourages slow, passive strategies. |
+
+`GrowthEfficiencyFitness` detail: `growth = length − initial_snake_length`, `ticks = game.tick`. The scale factor of 10 keeps the efficiency bonus meaningful relative to raw length while still letting length dominate for long-lived snakes.
+
+To compare fitness functions across the same hyperparameter grid, run two separate sweeps with different `run_name` values and different `fitness_function` settings.
 
 ---
 
