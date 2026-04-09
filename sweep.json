@@ -1,9 +1,10 @@
 {
-  "nn_class":    "Basic_Neural_Network",
-  "n_repeats":   2,
+  "nn_class":         "Basic_Neural_Network",
+  "fitness_function": "GrowthEfficiencyFitness",
+  "n_repeats":        2,
   "verbose":     true,
 
-  "run_name":    "Initial-Sweep",
+  "run_name":    "Speedrun",
   "prev_weights": null,
   "abbreviations": null,
 
@@ -15,7 +16,7 @@
 
   "base_params": {
     "population_size":  25,
-    "num_generations":  3,
+    "num_generations":  10,
     "elitism_count":    3,
     "games_per_genome": 3
   },
