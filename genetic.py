@@ -18,7 +18,7 @@ GENOME_LENGTH = Two_Layer_Neural_Network.genome_length(N_FEATURES)  # switch bas
 
 #could be moved into config.json?
 
-POPULATION_SIZE = 100       # number of genomes per generation
+POPULATION_SIZE = 20       # number of genomes per generation
 NUM_GENERATIONS = 1000       # how many generations to run
 MUTATION_RATE = 0.1        # probability of mutating each gene
 MUTATION_STRENGTH = 0.2    # how much a mutated gene shifts (±)
@@ -33,7 +33,7 @@ WEIGHTS_DIR = "weights"
 
 class GeneticPlayer(Player):
 
-    def __init__(self, player_id: int, genome: list[float], nn_class: type[Neural_Network] = Basic_Neural_Network) -> None:
+    def __init__(self, player_id: int, genome: list[float]=[], nn_class: type[Neural_Network] = Basic_Neural_Network) -> None:
         self.genome = genome
         self.player_id = player_id
         self.neural_network = nn_class(genome)
@@ -81,7 +81,7 @@ def evaluate_population(
         final_tick = game.tick
         for i, snake in enumerate(game.snakes):
             t = tick_died[i] if tick_died[i] > 0 else final_tick
-            total_fitnesses[i] += float(snake.length) * t
+            total_fitnesses[i] += float(snake.length)
 
     return [f / games_per_genome for f in total_fitnesses]
 
@@ -350,7 +350,7 @@ if __name__ == "__main__":
         csv_path = "results/default_results.csv"
         os.makedirs(GRAPHS_DIR, exist_ok=True)
         plot_path = os.path.join(GRAPHS_DIR, "default_fitness.png")
-        nn = Basic_Neural_Network
+        nn = Base_algorithm
         best = genetic(csv_path=csv_path, nn_class=nn)
         plot_fitness(
             csv_path=csv_path,

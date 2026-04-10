@@ -6,26 +6,28 @@ import os
 from config import load_config
 from data import get_features
 from game import Game
-from neural_network import N_FEATURES
+from neural_network import N_FEATURES, Base_algorithm
 from player import RandomPlayer, SafeRandomPlayer
 from rl_agent import ACTIONS, DQNAgent
+from genetic import GeneticPlayer
 
 # ── Hyperparameters ───────────────────────────────────────────────────────────
 HIDDEN_SIZE        = 64
 LR                 = 1e-3
 GAMMA              = 0.99
-BUFFER_CAPACITY    = 50_000
+BUFFER_CAPACITY    = 200_000
 BATCH_SIZE         = 1024
-TARGET_UPDATE_FREQ = 500    # global steps between target network syncs
+TARGET_UPDATE_FREQ = 1000    # global steps between target network syncs
 
 EPSILON_START      = 1.0
 EPSILON_MIN        = 0.05
 EPSILON_DECAY      = 0.99999  # multiplied per episode
 
 
-REWARD_ALIVE       =  1.0
-REWARD_APPLE       =  50.0
-REWARD_DIE         = -100.0
+REWARD_ALIVE       =  0.00
+REWARD_DIST        =  0.1
+REWARD_APPLE       =  1
+REWARD_DIE         = -1
 
 RL_SNAKE_ID        = 0
 RESULTS_DIR        = "results"
@@ -43,6 +45,14 @@ def _init_log(path: str) -> None:
 def _append_log(path: str, ep: int, reward: float, length: int, ticks: int, eps: float, loss: float | None) -> None:
     with open(path, "a", newline="") as f:
         csv.writer(f).writerow([ep, round(reward, 2), length, ticks, round(eps, 4), f"{loss:.4f}" if loss is not None else ""])
+
+
+def _nearest_apple_dist(gs: dict, snake_id: int) -> float | None:
+    snake = next((s for s in gs["snakes"] if s["id"] == snake_id), None)
+    if snake is None or not snake["alive"] or not gs["apples"]:
+        return None
+    hx, hy = snake["positions"][0]
+    return min(abs(ax - hx) + abs(ay - hy) for ax, ay in gs["apples"])
 
 
 def train_agent(num_episodes: int = 1_000_000, config_path: str = "config.json") -> DQNAgent:
@@ -70,14 +80,17 @@ def train_agent(num_episodes: int = 1_000_000, config_path: str = "config.json")
         # Slot 0 is a dummy — its action is always overridden via player_decisions
         opponents = []
         for i in range(1, config.num_snakes):
+            #p = GeneticPlayer(player_id=i, nn_class=Base_algorithm)
+            #p.snake_id = 
             p = SafeRandomPlayer()
-            p.snake_id = i
             opponents.append(p)
         players = [RandomPlayer()] + opponents
         game = Game(config, players)
 
         state = get_features(game.get_game_state(), RL_SNAKE_ID)
         prev_len = config.initial_snake_length
+        prev_dist = _nearest_apple_dist(game.get_game_state(), RL_SNAKE_ID)
+        grid_size = config.grid_size  # adjust attr name if different
         ep_reward = 0.0
         ep_loss_sum = 0.0
         ep_loss_n = 0
@@ -93,11 +106,19 @@ def train_agent(num_episodes: int = 1_000_000, config_path: str = "config.json")
             if not alive:
                 reward, done = REWARD_DIE, True
                 next_state = [0.0] * N_FEATURES
+                prev_dist = None
             else:
                 reward = REWARD_ALIVE
-                if rl_snake["length"] > prev_len:
+                ate_apple = rl_snake["length"] > prev_len
+                if ate_apple:
                     reward += REWARD_APPLE
                     prev_len = rl_snake["length"]
+
+                new_dist = _nearest_apple_dist(gs, RL_SNAKE_ID)
+                if not ate_apple and prev_dist is not None and new_dist is not None:
+                    reward += REWARD_DIST * (prev_dist - new_dist) / grid_size
+                prev_dist = new_dist
+
                 done = game.game_over
                 next_state = get_features(gs, RL_SNAKE_ID)
 
@@ -136,6 +157,7 @@ def train_agent(num_episodes: int = 1_000_000, config_path: str = "config.json")
             window_length = 0
             window_loss_sum = 0.0
             window_loss_n = 0
+
         if episode % 1_000 == 0:
             agent.save(CHECKPOINT_PATH)
 

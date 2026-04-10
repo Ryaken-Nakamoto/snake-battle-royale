@@ -22,12 +22,12 @@ class Basic_RL_Agent(nn.Module):
     def __init__(self, hidden: int = 64) -> None:
         super().__init__()
         self.fc1 = nn.Linear(N_FEATURES, hidden)
-        #self.fc2 = nn.Linear(hidden, hidden)
+        self.fc2 = nn.Linear(hidden, hidden)
         self.fc3 = nn.Linear(hidden, N_ACTIONS)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         x = F.relu(self.fc1(x))
-        #x = F.relu(self.fc2(x))
+        x = F.relu(self.fc2(x))
         return self.fc3(x)  
 
 
@@ -95,16 +95,12 @@ class DQNAgent:
         q_values = self.online(states_t).gather(1, actions_t).squeeze(1)
 
         with torch.no_grad():
-            # Double DQN: online selects action, target evaluates it
-            next_actions = self.online(next_states_t).argmax(dim=1, keepdim=True)
-            next_q   = self.target(next_states_t).gather(1, next_actions).squeeze(1)
-            targets  = rewards_t + self.gamma * next_q * (1.0 - dones_t)
+            next_q  = self.target(next_states_t).max(dim=1).values
+            targets = rewards_t + self.gamma * next_q * (1.0 - dones_t)
 
-        # Huber loss — doesn't square large errors, much more stable than MSE
-        loss = F.smooth_l1_loss(q_values, targets)
+        loss = F.mse_loss(q_values, targets)
         self.optimizer.zero_grad()
         loss.backward()
-        torch.nn.utils.clip_grad_norm_(self.online.parameters(), max_norm=10.0)
         self.optimizer.step()
 
         self._steps += 1

@@ -4,7 +4,7 @@
     "num_snakes": 20,
     "initial_snake_length": 3,
     "apple_density": 20,
-    "win_length": 50,
+    "win_length": 1000,
     "boost_multiplier": 5.0,
     "max_stamina_factor": 1.0,
     "stamina_recovery_factor": 1.0,
