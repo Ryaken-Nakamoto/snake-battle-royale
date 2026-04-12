@@ -218,7 +218,6 @@ class Game:
                 continue
             pre_move_bodies[snake.snake_id] = list(snake.positions)
 
-
         # 4. Move all snakes
         for snake in self.snakes:
             if not snake.alive:
@@ -229,65 +228,49 @@ class Game:
         dead_ids: set[int] = set()
         alive_snakes = [s for s in self.snakes if s.alive]
 
-        # Build body lookup (exclude heads for body collision, include for wall/self)
+        # 5a. Wall collision — check every tile in each snake's path
         for snake in alive_snakes:
-            head = snake.head
-
-            # Wall collision
-            if not self.grid.in_bounds(head):
-                dead_ids.add(snake.snake_id)
-                continue
-
-            # Also check intermediate position for boosting snakes
-            heads_list = new_heads_map[snake.snake_id]
-            for h in heads_list:
-                if not self.grid.in_bounds(h):
+            for tile in new_heads_map[snake.snake_id]:
+                if not self.grid.in_bounds(tile):
                     dead_ids.add(snake.snake_id)
                     break
 
-        # Body collision: head hits any body segment (excluding own head)
-        # Build full body set per snake (positions minus head)
-        body_tiles: dict[int, set[Pos]] = {}
-        for s in alive_snakes:
-            body_tiles[s.snake_id] = set(s.positions[1:])
-
+        # 5b. Body collision — check every tile in each snake's path against
+        # every other snake's pre-move body and the exposed portion of own body.
+        # "Exposed" own segments are those not vacated by the tail this tick.
         for snake in alive_snakes:
             if snake.snake_id in dead_ids:
                 continue
-            head = snake.head
-            # Check against all snakes' bodies (including own tail)
-            for other in alive_snakes:
-                if other.snake_id == snake.snake_id:
-                    steps = len(new_heads_map[snake.snake_id])
-                    pre_body = pre_move_bodies[snake.snake_id]
-                    exposed_body = set(pre_body[1 : len(pre_body) - steps])
-                    if head in exposed_body:
-                        dead_ids.add(snake.snake_id)
-                        break
-                else:
-                    # Use pre-move body of the other snake here too
-                    pre_body = pre_move_bodies[other.snake_id]
-                    if head in set(pre_body):
-                        dead_ids.add(snake.snake_id)
-                        break
 
-            # Also check intermediate tiles for boost moves
-            if snake.snake_id not in dead_ids and len(new_heads_map[snake.snake_id]) > 1:
-                intermediate = new_heads_map[snake.snake_id][0]
-                for other in alive_snakes:
-                    pre_body = pre_move_bodies[other.snake_id]
-                    if other.snake_id == snake.snake_id:
-                        steps = len(new_heads_map[snake.snake_id])
-                        exposed_body = pre_body[1 : len(pre_body) - steps]
-                        if intermediate in set(exposed_body):
-                            dead_ids.add(snake.snake_id)
-                            break
-                    else:
-                        if intermediate in set(pre_body):  # already using pre_body here
-                            dead_ids.add(snake.snake_id)
-                            break
+            path = new_heads_map[snake.snake_id]
+            steps = len(path)
+            pre_body_self = pre_move_bodies[snake.snake_id]
+            # pre_body_self[0] is the old head; the last `steps` segments vacate
+            # as the tail moves up, so they're safe to pass through.
+            own_exposed = set(pre_body_self[1 : len(pre_body_self) - steps])
 
-        # Head-to-head collision: two heads at same tile
+            # Precompute other snakes' pre-move bodies as sets for fast lookup.
+            other_bodies: list[tuple[int, set[Pos]]] = [
+                (other.snake_id, set(pre_move_bodies[other.snake_id]))
+                for other in alive_snakes
+                if other.snake_id != snake.snake_id
+            ]
+
+            collided = False
+            for tile in path:
+                if tile in own_exposed:
+                    dead_ids.add(snake.snake_id)
+                    collided = True
+                    break
+                for _other_id, other_body in other_bodies:
+                    if tile in other_body:
+                        dead_ids.add(snake.snake_id)
+                        collided = True
+                        break
+                if collided:
+                    break
+
+        # 5c. Head-to-head collision: two heads end the tick on the same tile.
         head_positions: dict[Pos, list[int]] = {}
         for snake in alive_snakes:
             if snake.snake_id in dead_ids:
@@ -303,15 +286,24 @@ class Game:
             if snake.snake_id in dead_ids:
                 snake.kill()
 
-        # 7. Apple consumption
+        # 7. Apple consumption — check every tile in each snake's path, not just
+        # the final head. A boosting snake should eat any apple along its path.
         apples_eaten: set[Pos] = set()
-        # Check if multiple snakes eat the same apple (treat as head collision)
         apple_eaters: dict[Pos, list[int]] = {}
         for snake in self.snakes:
             if not snake.alive:
                 continue
-            if snake.head in self.grid.apples:
-                apple_eaters.setdefault(snake.head, []).append(snake.snake_id)
+            path = new_heads_map.get(snake.snake_id, [snake.head])
+            # Intermediate tiles: solo consumption, no multi-eater collision rule.
+            for tile in path[:-1]:
+                if tile in self.grid.apples and tile not in apples_eaten:
+                    snake.schedule_grow(1)
+                    apples_eaten.add(tile)
+            # Final tile: use existing multi-eater collision rule so two snakes
+            # finishing on the same apple still both die.
+            final = path[-1]
+            if final in self.grid.apples and final not in apples_eaten:
+                apple_eaters.setdefault(final, []).append(snake.snake_id)
 
         for pos, ids in apple_eaters.items():
             if len(ids) > 1:
@@ -337,7 +329,6 @@ class Game:
         # Also end if no snakes alive
         if not any(s.alive for s in self.snakes):
             self.game_over = True
-
 
     def get_grid(self) -> Grid:
         return self.grid

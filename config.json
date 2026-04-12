@@ -12,5 +12,5 @@
     "fps": 10,
     "limit_scope": false,
     "max_moves_flag": true,
-    "max_moves": 100
+    "max_moves": 200
 }

@@ -8,18 +8,18 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from data import get_features
-from neural_network import N_FEATURES
+from data import get_features, N_FEATURES
 from player import Player
 from snake import Action
 
-ACTIONS = list(Action) 
+ACTIONS   = list(Action)
 N_ACTIONS = len(ACTIONS)
 
 
-class Basic_RL_Agent(nn.Module):
+class MLP_RL_Agent(nn.Module):
+    """2-hidden-layer MLP over hand-engineered features."""
 
-    def __init__(self, hidden: int = 64) -> None:
+    def __init__(self, hidden: int = 128) -> None:
         super().__init__()
         self.fc1 = nn.Linear(N_FEATURES, hidden)
         self.fc2 = nn.Linear(hidden, hidden)
@@ -28,12 +28,12 @@ class Basic_RL_Agent(nn.Module):
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         x = F.relu(self.fc1(x))
         x = F.relu(self.fc2(x))
-        return self.fc3(x)  
+        return self.fc3(x)
 
 
 class ReplayBuffer:
 
-    def __init__(self, capacity: int = 50_000) -> None:
+    def __init__(self, capacity: int = 200_000) -> None:
         self._buf: deque = deque(maxlen=capacity)
 
     def push(self, state: list[float], action: int, reward: float, next_state: list[float], done: bool) -> None:
@@ -51,22 +51,24 @@ class DQNAgent:
     def __init__(
         self,
         *,
-        hidden: int = 64,
-        lr: float = 1e-3,
+        hidden: int = 128,
+        lr: float = 3e-4,
         gamma: float = 0.99,
-        buffer_capacity: int = 50_000,
-        batch_size: int = 64,
-        target_update_freq: int = 500,
+        buffer_capacity: int = 200_000,
+        batch_size: int = 128,
+        target_update_freq: int = 1000,
+        grad_clip: float = 10.0,
         device: str | None = None,
     ) -> None:
         self.gamma = gamma
         self.batch_size = batch_size
         self.target_update_freq = target_update_freq
+        self.grad_clip = grad_clip
         self._steps = 0
         self.device = torch.device(device if device else ("cuda" if torch.cuda.is_available() else "cpu"))
 
-        self.online = Basic_RL_Agent(hidden).to(self.device)
-        self.target = Basic_RL_Agent(hidden).to(self.device)
+        self.online = MLP_RL_Agent(hidden).to(self.device)
+        self.target = MLP_RL_Agent(hidden).to(self.device)
         self.target.load_state_dict(self.online.state_dict())
         self.target.eval()
 
@@ -94,13 +96,16 @@ class DQNAgent:
 
         q_values = self.online(states_t).gather(1, actions_t).squeeze(1)
 
+        # Double DQN: pick action with online net, evaluate with target net.
         with torch.no_grad():
-            next_q  = self.target(next_states_t).max(dim=1).values
-            targets = rewards_t + self.gamma * next_q * (1.0 - dones_t)
+            next_actions = self.online(next_states_t).argmax(dim=1, keepdim=True)
+            next_q       = self.target(next_states_t).gather(1, next_actions).squeeze(1)
+            targets      = rewards_t + self.gamma * next_q * (1.0 - dones_t)
 
         loss = F.mse_loss(q_values, targets)
         self.optimizer.zero_grad()
         loss.backward()
+        torch.nn.utils.clip_grad_norm_(self.online.parameters(), max_norm=self.grad_clip)
         self.optimizer.step()
 
         self._steps += 1

@@ -23,7 +23,7 @@ NUM_GENERATIONS = 1000       # how many generations to run
 MUTATION_RATE = 0.1        # probability of mutating each gene
 MUTATION_STRENGTH = 0.2    # how much a mutated gene shifts (±)
 CROSSOVER_RATE = 0.7       # probability of doing crossover vs. cloning
-ELITISM_COUNT = 10          # top N genomes carried unchanged to next gen
+ELITISM_COUNT = 2          # top N genomes carried unchanged to next gen
 GAMES_PER_GENOME = 3       # run multiple games per generation and average fitness for stability
 
 RESULTS_DIR = "results"
@@ -350,7 +350,7 @@ if __name__ == "__main__":
         csv_path = "results/default_results.csv"
         os.makedirs(GRAPHS_DIR, exist_ok=True)
         plot_path = os.path.join(GRAPHS_DIR, "default_fitness.png")
-        nn = Base_algorithm
+        nn = Basic_Neural_Network
         best = genetic(csv_path=csv_path, nn_class=nn)
         plot_fitness(
             csv_path=csv_path,
@@ -365,6 +365,6 @@ if __name__ == "__main__":
                 "games_per_genome": GAMES_PER_GENOME,
                 "genome_length": nn.genome_length(N_FEATURES),
             },
-            exp_name="Default Run",
+            exp_name="One Layer NN Genetic",
         )
         print(f"\nBest genome:\n{best}")
