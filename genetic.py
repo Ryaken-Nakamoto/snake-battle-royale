@@ -18,13 +18,13 @@ from datetime import datetime
 
 GENOME_LENGTH = Two_Layer_Neural_Network.genome_length(N_FEATURES)  # switch based on which nn class u r using
 
-POPULATION_SIZE = 25       # number of genomes per generation
-NUM_GENERATIONS = 30       # how many generations to run
-MUTATION_RATE = 0.15        # probability of mutating each gene
-MUTATION_STRENGTH = 0.25    # how much a mutated gene shifts
-CROSSOVER_RATE = 0.8       # probability of doing crossover vs. cloning
-ELITISM_COUNT = 3         # top N genomes carried unchanged to next gen
-GAMES_PER_GENOME = 5       # run multiple games per generation and average fitness for stability
+POPULATION_SIZE = 20       # number of genomes per generation
+NUM_GENERATIONS = 1000       # how many generations to run
+MUTATION_RATE = 0.1        # probability of mutating each gene
+MUTATION_STRENGTH = 0.2    # how much a mutated gene shifts (±)
+CROSSOVER_RATE = 0.7       # probability of doing crossover vs. cloning
+ELITISM_COUNT = 2          # top N genomes carried unchanged to next gen
+GAMES_PER_GENOME = 3       # run multiple games per generation and average fitness for stability
 
 RESULTS_DIR = "results"
 GRAPHS_DIR = "graphs"
@@ -33,7 +33,7 @@ WEIGHTS_DIR = "weights"
 
 class GeneticPlayer(Player):
 
-    def __init__(self, player_id: int, genome: list[float], nn_class: type[Neural_Network] = Basic_Neural_Network) -> None:
+    def __init__(self, player_id: int, genome: list[float]=[], nn_class: type[Neural_Network] = Basic_Neural_Network) -> None:
         self.genome = genome
         self.player_id = player_id
         self.neural_network = nn_class(genome)
@@ -73,13 +73,20 @@ def evaluate_population(
     for j in range(games_per_genome):
         players: list[Player] = [GeneticPlayer(i, genome, nn_class) for i, genome in enumerate(population)]
         game = Game(config, players)
+        prev_alive = [True] * len(population)
+        tick_died = [0] * len(population)
 
         while not game.game_over:
             game.progress_game()
+            for i, snake in enumerate(game.snakes):
+                if prev_alive[i] and not snake.alive:
+                    tick_died[i] = game.tick
+                    prev_alive[i] = False
 
+        final_tick = game.tick
         for i, snake in enumerate(game.snakes):
-            total_fitnesses[i] += fitness_function.score(snake, game)
-            total_lengths[i] += float(snake.length)
+            t = tick_died[i] if tick_died[i] > 0 else final_tick
+            total_fitnesses[i] += float(snake.length)
 
     fitnesses = [f / games_per_genome for f in total_fitnesses]
     lengths = [l / games_per_genome for l in total_lengths]
@@ -386,14 +393,18 @@ def plot_fitness(csv_path: str, plot_path: str, *, hyperparams: dict, exp_name: 
     # Create two subplots
     fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(10, 10))
 
-    # --- Top subplot: Fitness ---
-    ax1.plot(generations, avg_fitnesses, linewidth=2, label="avg fitness", color="steelblue")
-    ax1.fill_between(generations, worst_fitnesses, best_fitnesses, alpha=0.25, color="steelblue", label="best/worst band")
-    ax1.set_xlabel("Generation", fontsize=12)
-    ax1.set_ylabel("Fitness score", fontsize=12)
-    ax1.set_title(f"{exp_name} — Fitness over Generations", fontsize=14, fontweight="bold")
-    ax1.legend(loc="lower right", fontsize=10)
-    ax1.grid(True, alpha=0.3)
+    # Plot avg fitness line
+    ax.plot(generations, avg_fitnesses, linewidth=2, label="avg fitness", color="steelblue")
+
+    # Fill between best/worst band
+    ax.fill_between(generations, worst_fitnesses, best_fitnesses, alpha=0.25, color="steelblue", label="best/worst band")
+
+    # Labels and legend
+    ax.set_xlabel("Generation", fontsize=12)
+    ax.set_ylabel("Fitness (length × ticks alive)", fontsize=12)
+    ax.set_title(f"{exp_name} — Fitness over Generations", fontsize=14, fontweight="bold")
+    ax.legend(loc="lower right", fontsize=10)
+    ax.grid(True, alpha=0.3)
 
     # Build annotation text from hyperparams
     anno_lines = [
@@ -537,6 +548,6 @@ if __name__ == "__main__":
                 "games_per_genome": GAMES_PER_GENOME,
                 "genome_length": nn.genome_length(N_FEATURES),
             },
-            exp_name="Default Run",
+            exp_name="One Layer NN Genetic",
         )
         print(f"\nBest genome:\n{best}")

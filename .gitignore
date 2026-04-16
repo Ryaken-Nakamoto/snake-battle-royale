@@ -2,3 +2,5 @@ graphs/
 results/
 weights/
 __pycache__/
+*.pyc
+
