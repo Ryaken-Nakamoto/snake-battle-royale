@@ -10,9 +10,18 @@ from config import load_config
 from game import Game
 from player import HumanPlayer, Player, SafeRandomPlayer
 from renderer import Renderer
-from data import get_grid_data, get_features
+from genetic import GeneticPlayer, load_previous_weights
+from data import get_features
+from neural_network import Neural_Network, Basic_Neural_Network, Two_Layer_Neural_Network, Base_algorithm
+import csv
 
+NN_REGISTRY: dict[str, type[Neural_Network]] = {
+    "Basic_Neural_Network":     Basic_Neural_Network,
+    "Two_Layer_Neural_Network": Two_Layer_Neural_Network,
+    "Base_algorithm":           Base_algorithm,
+}
 
+# build snakes that make random actions
 def build_players(num_snakes: int, human_index: int = 0) -> list[Player]:
     """Create the player list: one HumanPlayer, rest RandomPlayers."""
     players: list[Player] = []
@@ -21,18 +30,40 @@ def build_players(num_snakes: int, human_index: int = 0) -> list[Player]:
            player = HumanPlayer()
         else:
             player = SafeRandomPlayer()
-            player.snake_id = i # snakes can find themselves in game state and avoid self collisions
+            player.snake_id = i 
+        players.append(player)
+    return players
+
+# build snakes that make decisions based on prev found weights
+def build_genetic_players(num_snakes: int, genome: list[float], human_index: int | None = None,
+                           nn_class: type[Neural_Network] = Basic_Neural_Network) -> list[Player]:
+    """Create the player list: all GeneticPlayers sharing one genome, with optional HumanPlayer."""
+    players: list[Player] = []
+    for i in range(num_snakes):
+        if i == human_index:
+            player = HumanPlayer()
+        else:
+            player = GeneticPlayer(i, genome, nn_class)
         players.append(player)
     return players
 
 
-def main() -> None:
+def main(create_human: bool, genetic_game: bool, weight_path: str | None = None) -> None:
     config = load_config("config.json")
-    human_index = 0
-    players = build_players(config.num_snakes, human_index)
+    human_index: int | None = 0 if create_human else None
+
+    # use snakes trained by the generic algorithm
+    if genetic_game:
+        genome, nn_name = load_previous_weights(weight_path)
+        nn_class = NN_REGISTRY.get(nn_name, Basic_Neural_Network) if nn_name else Basic_Neural_Network
+        players = build_genetic_players(config.num_snakes, genome, human_index, nn_class)
+    # use SafeRandom player snakes 
+    else:
+        players = build_players(config.num_snakes, human_index)
+
     game = Game(config, players)
     renderer = Renderer(config, human_index)
-    human_player: HumanPlayer = players[human_index]  # type: ignore[assignment]
+    human_player: HumanPlayer | None = players[human_index] if create_human else None
 
     clock = pygame.time.Clock()
     paused = False
@@ -49,13 +80,15 @@ def main() -> None:
                     sys.exit()
                 elif event.key == pygame.K_p:
                     paused = not paused
-                else:
+                elif human_player is not None:
                     human_player.buffer_key(event.key)
 
         if not paused and not game.game_over:
             # Check held keys for boost
             keys = pygame.key.get_pressed()
-            human_player.update_held_keys(keys)
+
+            if human_player is not None:
+                human_player.update_held_keys(keys)
 
             # Advance game
             game.progress_game()
@@ -67,4 +100,20 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    args = sys.argv[1:]
+    config = load_config("config.json")
+
+    weight_path: str | None = None
+    if "--prev-weights" in args:
+        idx = args.index("--prev-weights")
+        weight_path = args[idx + 1]
+
+    if weight_path and "human" in args:
+        print(f"Staring game: 1 human player, {config.num_snakes - 1} AI snake players 🐍")
+        main(create_human=True, genetic_game=True, weight_path=weight_path)
+    elif weight_path:
+        print(f"Staring game: {config.num_snakes} AI snake players 🐍")
+        main(create_human=False, genetic_game=True, weight_path=weight_path)
+    else:
+        print(f"Staring game: 1 human player, {config.num_snakes} random snake players 🐍")
+        main(create_human=True, genetic_game=False)

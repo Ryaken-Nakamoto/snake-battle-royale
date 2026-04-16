@@ -23,6 +23,12 @@ Reads experiment definitions from `experiments.json`, runs each, and saves all o
 
 ---
 
+### Run an experiment using prev weights
+```bash
+python genetic.py --prev-weights {weight_path} {optional config_path} {optional experiment_name}
+```
+You do not need to put weight/{path}, just put the name of the file. If you do not put a config file name, the default "config.json" will be used. If you do not put an experiement name, the results and weights of the experiement will be saved as "results/experiment_YYYY-MM-DD_HH:MM:SS:_results.csv" and "weights/experiment_YYYY-MM-DD_HH:MM:SS:_weights.csv" respectively. 
+
 ## Understanding the Algorithm
 
 ### Flow

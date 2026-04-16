@@ -1,4 +1,6 @@
+graphs/
+results/
+weights/
 __pycache__/
 *.pyc
-results/
-graphs/
+

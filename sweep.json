@@ -1,0 +1,29 @@
+{
+  "nn_class":         "Basic_Neural_Network",
+  "fitness_function": "GrowthEfficiencyFitness",
+  "n_repeats":        2,
+  "verbose":     true,
+
+  "run_name":    "Speedrun",
+  "prev_weights": null,
+  "abbreviations": null,
+
+  "param_grid": {
+    "mutation_rate":     {"arange": [0.05, 0.30, 0.05]},
+    "mutation_strength": {"arange": [0.10, 0.50, 0.10]},
+    "crossover_rate":    [0.5, 0.7, 0.9]
+  },
+
+  "base_params": {
+    "population_size":  25,
+    "num_generations":  10,
+    "elitism_count":    3,
+    "games_per_genome": 3
+  },
+
+  "output": {
+    "x_param":     "mutation_rate",
+    "y_param":     "mutation_strength",
+    "facet_param": "crossover_rate"
+  }
+}

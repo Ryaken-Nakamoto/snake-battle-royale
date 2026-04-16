@@ -1,5 +1,5 @@
 from __future__ import annotations
-
+import sys
 import csv
 import os
 import random
@@ -12,6 +12,8 @@ from snake import Action
 from data import get_features
 import matplotlib.pyplot as plt
 from neural_network import Neural_Network, Basic_Neural_Network, Two_Layer_Neural_Network, Base_algorithm, N_FEATURES
+from fitness import FitnessFunction, LengthFitness
+from datetime import datetime
 
 
 GENOME_LENGTH = Two_Layer_Neural_Network.genome_length(N_FEATURES)  # switch based on which nn class u r using
@@ -48,14 +50,18 @@ class GeneticPlayer(Player):
 
     
 
-# Runs games_per_genome games for each genome and averages the snake length as fitness.
+# Runs games_per_genome games for each genome and averages the fitness score.
 def evaluate_population(
     population: list[list[float]],
     config_path: str = "config.json",
     *,
     games_per_genome: int,
     nn_class: type[Neural_Network] = Basic_Neural_Network,
-) -> list[float]:
+    fitness_function: FitnessFunction | None = None,
+) -> tuple[list[float], list[float]]:
+
+    if fitness_function is None:
+        fitness_function = LengthFitness()
 
     config = load_config(config_path)
     assert len(population) == config.num_snakes, (
@@ -64,6 +70,7 @@ def evaluate_population(
     )
 
     total_fitnesses = [0.0] * len(population)
+    total_lengths = [0.0] * len(population)
 
     for j in range(games_per_genome):
         players: list[Player] = [GeneticPlayer(i, genome, nn_class) for i, genome in enumerate(population)]
@@ -83,13 +90,14 @@ def evaluate_population(
             t = tick_died[i] if tick_died[i] > 0 else final_tick
             total_fitnesses[i] += float(snake.length)
 
-    return [f / games_per_genome for f in total_fitnesses]
+    fitnesses = [f / games_per_genome for f in total_fitnesses]
+    lengths = [l / games_per_genome for l in total_lengths]
+    return fitnesses, lengths
 
 
 def random_genome(length: int) -> list[float]:
     return [random.uniform(-1.0, 1.0) for _ in range(length)]
 
-#TODO: different crossover strategy?
 def crossover(parent_a: list[float], parent_b: list[float], *, crossover_rate: float, genome_length: int) -> list[float]:
     if random.random() > crossover_rate:
         return list(parent_a)  # clone
@@ -104,14 +112,11 @@ def mutate(genome: list[float], *, mutation_rate: float, mutation_strength: floa
         for gene in genome
     ]
 
-#TODO: this uses touranment selection might want to change?
 def select_parent(population: list[list[float]], fitnesses: list[float]) -> list[float]:
     a, b = random.sample(range(len(population)), 2)
     return population[a] if fitnesses[a] >= fitnesses[b] else population[b]
 
 
-
-# TODO: add more columns if needed
 def _init_csv(path: str) -> None:
     os.makedirs(os.path.dirname(path), exist_ok=True)
     with open(path, "w", newline="") as f:
@@ -120,11 +125,14 @@ def _init_csv(path: str) -> None:
             "generation",
             "best_fitness",
             "avg_fitness",
-            "worst_fitness",     
+            "worst_fitness",
+            "best_length",
+            "avg_length",
+            "worst_length",
         ])
 
 
-def _log_generation(path: str, generation: int, fitnesses: list[float]) -> None:
+def _log_generation(path: str, generation: int, fitnesses: list[float], lengths: list[float]) -> None:
     with open(path, "a", newline="") as f:
         writer = csv.writer(f)
         writer.writerow([
@@ -132,6 +140,9 @@ def _log_generation(path: str, generation: int, fitnesses: list[float]) -> None:
             round(max(fitnesses), 4),
             round(sum(fitnesses) / len(fitnesses), 4),
             round(min(fitnesses), 4),
+            round(max(lengths), 4),
+            round(sum(lengths) / len(lengths), 4),
+            round(min(lengths), 4),
         ])
 
 def genetic(
@@ -147,6 +158,9 @@ def genetic(
     elitism_count: int = ELITISM_COUNT,
     games_per_genome: int = GAMES_PER_GENOME,
     genome_length: int | None = None,
+    prev_weights: str | None = None,
+    weights_path: str | None = None,
+    fitness_function: FitnessFunction | None = None,
 ) -> list[float]:
     if genome_length is None:
         genome_length = nn_class.genome_length(N_FEATURES)
@@ -157,22 +171,30 @@ def genetic(
 
     _init_csv(csv_path)
 
-    # Generation 0: random population
-    population: list[list[float]] = [random_genome(genome_length) for _ in range(population_size)]
+    # Generation 0: seed from prev_weights or random
+    if prev_weights is not None:
+        seed_genome, _ = load_previous_weights(prev_weights)
+        genome_length = len(seed_genome)
+        print(f"[genetic] Seeding population from: {prev_weights}")
+        population: list[list[float]] = [seed_genome]
+        while len(population) < population_size:
+            population.append(mutate(seed_genome, mutation_rate=mutation_rate, mutation_strength=mutation_strength))
+    else:
+        population: list[list[float]] = [random_genome(genome_length) for _ in range(population_size)]
 
     best_genome: list[float] = population[0]
     best_ever_fitness: float = float("-inf")
 
     for generation in range(1, num_generations + 1):
 
-        fitnesses: list[float] = evaluate_population(population, config_path, games_per_genome=games_per_genome, nn_class=nn_class)
+        fitnesses, lengths = evaluate_population(population, config_path, games_per_genome=games_per_genome, nn_class=nn_class, fitness_function=fitness_function)
 
         gen_best_idx = fitnesses.index(max(fitnesses))
         if fitnesses[gen_best_idx] > best_ever_fitness:
             best_ever_fitness = fitnesses[gen_best_idx]
             best_genome = list(population[gen_best_idx])
 
-        _log_generation(csv_path, generation, fitnesses)
+        _log_generation(csv_path, generation, fitnesses, lengths)
 
         print(
             f"Gen {generation:>4}/{num_generations} | "
@@ -201,30 +223,147 @@ def genetic(
     print(f"[genetic] CSV saved to: {csv_path}")
 
     # Save best genome weights
-    os.makedirs(WEIGHTS_DIR, exist_ok=True)
-    weights_path = os.path.join(WEIGHTS_DIR, os.path.basename(os.path.splitext(csv_path)[0]) + "_weights.csv")
-    save_genome(best_genome, weights_path)
+    if weights_path is None:
+        os.makedirs(WEIGHTS_DIR, exist_ok=True)
+        weights_path = os.path.join(WEIGHTS_DIR, os.path.basename(os.path.splitext(csv_path)[0]) + "_weights.csv")
+    save_genome(best_genome, weights_path, nn_class)
     print(f"[genetic] Weights saved to: {weights_path}")
 
     return best_genome
 
+def resume_training(
+    weight_path: str,
+    config_path: str = "config.json",
+    experiment_name: str = "resumed",
+    *,
+    nn_class: type[Neural_Network] = Basic_Neural_Network,
+    population_size: int = POPULATION_SIZE,
+    num_generations: int = NUM_GENERATIONS,
+    mutation_rate: float = MUTATION_RATE,
+    mutation_strength: float = MUTATION_STRENGTH,
+    crossover_rate: float = CROSSOVER_RATE,
+    elitism_count: int = ELITISM_COUNT,
+    games_per_genome: int = GAMES_PER_GENOME,
+    fitness_function: FitnessFunction | None = None,
+) -> list[float]:
+    """Resume training from a previously saved genome, seeding the population with it.
 
-def save_genome(genome: list[float], csv_path: str) -> None:
+    The saved genome is placed at index 0; the rest of the population is generated
+    by mutating copies of it, giving evolution a head-start from a known good solution.
+
+    Args:
+        weight_path: Path to the saved weights CSV
+        config_path: Path to game config JSON
+        experiment_name: Name used for output file paths
+
+    Returns:
+        Best genome found after continued training
+    """
+    seed_genome, loaded_nn_name = load_previous_weights(weight_path)
+    genome_length = len(seed_genome)
+
+    print(f"[resume_training] Seeding population from: {weight_path}")
+    print(f"[resume_training] Genome length: {genome_length}")
+
+    # Seed population: keep the original + mutated variants of it
+    population: list[list[float]] = [seed_genome]
+    while len(population) < population_size:
+        mutated = mutate(
+            seed_genome,
+            mutation_rate=mutation_rate,
+            mutation_strength=mutation_strength,
+        )
+        population.append(mutated)
+
+    csv_path = os.path.join(RESULTS_DIR, f"{experiment_name}_results.csv")
+    plot_path = os.path.join(GRAPHS_DIR, f"{experiment_name}_fitness.png")
+
+    os.makedirs(RESULTS_DIR, exist_ok=True)
+    os.makedirs(GRAPHS_DIR, exist_ok=True)
+    _init_csv(csv_path)
+
+    best_genome = seed_genome
+    best_ever_fitness = float("-inf")
+
+    for generation in range(1, num_generations + 1):
+        fitnesses, lengths = evaluate_population(
+            population,
+            config_path,
+            games_per_genome=games_per_genome,
+            nn_class=nn_class,
+            fitness_function=fitness_function,
+        )
+
+        gen_best_idx = fitnesses.index(max(fitnesses))
+        if fitnesses[gen_best_idx] > best_ever_fitness:
+            best_ever_fitness = fitnesses[gen_best_idx]
+            best_genome = list(population[gen_best_idx])
+
+        _log_generation(csv_path, generation, fitnesses, lengths)
+
+        print(
+            f"Gen {generation:>4}/{num_generations} | "
+            f"best={max(fitnesses):.2f}  avg={sum(fitnesses)/len(fitnesses):.2f}  "
+            f"worst={min(fitnesses):.2f}"
+        )
+
+        ranked = sorted(range(len(population)), key=lambda i: fitnesses[i], reverse=True)
+        next_population: list[list[float]] = [list(population[ranked[i]]) for i in range(elitism_count)]
+
+        while len(next_population) < population_size:
+            parent_a = select_parent(population, fitnesses)
+            parent_b = select_parent(population, fitnesses)
+            child = crossover(parent_a, parent_b, crossover_rate=crossover_rate, genome_length=genome_length)
+            child = mutate(child, mutation_rate=mutation_rate, mutation_strength=mutation_strength)
+            next_population.append(child)
+
+        population = next_population
+
+    print(f"\n[resume_training] Done. Best fitness: {best_ever_fitness:.4f}")
+
+    weights_path = os.path.join(WEIGHTS_DIR, f"{experiment_name}_results_weights.csv")
+    save_genome(best_genome, weights_path, nn_class)
+    print(f"[resume_training] Weights saved to: {weights_path}")
+
+    hyperparams = {
+        "population_size": population_size,
+        "num_generations": num_generations,
+        "mutation_rate": mutation_rate,
+        "mutation_strength": mutation_strength,
+        "crossover_rate": crossover_rate,
+        "elitism_count": elitism_count,
+        "games_per_genome": games_per_genome,
+        "genome_length": genome_length,
+    }
+    plot_fitness(csv_path=csv_path, plot_path=plot_path, hyperparams=hyperparams, exp_name=experiment_name,
+                 fitness_fn=type(fitness_function or LengthFitness()).__name__)
+    print(f"[resume_training] Plot saved to: {plot_path}")
+
+    return best_genome
+
+
+def save_genome(genome: list[float], csv_path: str, nn_class: type[Neural_Network] | None = None) -> None:
     """Save a genome (list of weights) to a CSV file.
 
     Args:
         genome: List of float weights
         csv_path: Path where to save the genome CSV
     """
-    os.makedirs(os.path.dirname(csv_path), exist_ok=True)
+    os.makedirs(os.path.dirname(csv_path) or ".", exist_ok=True)
     with open(csv_path, "w", newline="") as f:
         writer = csv.writer(f)
-        writer.writerow(["weight"])
-        for weight in genome:
-            writer.writerow([weight])
+        if nn_class is not None:
+            writer.writerow(["weight", "nn_class"])
+            writer.writerow([genome[0], nn_class.__name__])
+            for weight in genome[1:]:
+                writer.writerow([weight])
+        else:
+            writer.writerow(["weight"])
+            for weight in genome:
+                writer.writerow([weight])
 
 
-def plot_fitness(csv_path: str, plot_path: str, *, hyperparams: dict, exp_name: str = "Genetic Algorithm") -> None:
+def plot_fitness(csv_path: str, plot_path: str, *, hyperparams: dict, exp_name: str = "Genetic Algorithm", fitness_fn: str = "LengthFitness") -> None:
     """Plot fitness convergence from a genetic algorithm CSV output.
 
     Args:
@@ -238,6 +377,9 @@ def plot_fitness(csv_path: str, plot_path: str, *, hyperparams: dict, exp_name: 
     avg_fitnesses = []
     best_fitnesses = []
     worst_fitnesses = []
+    avg_lengths = []
+    best_lengths = []
+    worst_lengths = []
 
     with open(csv_path, "r", newline="") as f:
         reader = csv.DictReader(f)
@@ -246,9 +388,12 @@ def plot_fitness(csv_path: str, plot_path: str, *, hyperparams: dict, exp_name: 
             avg_fitnesses.append(float(row["avg_fitness"]))
             best_fitnesses.append(float(row["best_fitness"]))
             worst_fitnesses.append(float(row["worst_fitness"]))
+            avg_lengths.append(float(row["avg_length"]))
+            best_lengths.append(float(row["best_length"]))
+            worst_lengths.append(float(row["worst_length"]))
 
-    # Create plot
-    fig, ax = plt.subplots(figsize=(10, 6))
+    # Create two subplots
+    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(10, 10))
 
     # Plot avg fitness line
     ax.plot(generations, avg_fitnesses, linewidth=2, label="avg fitness", color="steelblue")
@@ -265,6 +410,7 @@ def plot_fitness(csv_path: str, plot_path: str, *, hyperparams: dict, exp_name: 
 
     # Build annotation text from hyperparams
     anno_lines = [
+        f"fitness_fn={fitness_fn}",
         f"pop={hyperparams['population_size']:<3}  gens={hyperparams['num_generations']:<3}",
         f"mut_rate={hyperparams['mutation_rate']:<5.2f}  mut_str={hyperparams['mutation_strength']:<5.2f}",
         f"xover={hyperparams['crossover_rate']:<5.2f}  elitism={hyperparams['elitism_count']:<2}",
@@ -272,17 +418,50 @@ def plot_fitness(csv_path: str, plot_path: str, *, hyperparams: dict, exp_name: 
     ]
     anno_text = "\n".join(anno_lines)
 
-    ax.text(
+    ax1.text(
         0.98, 0.98, anno_text,
-        transform=ax.transAxes,
+        transform=ax1.transAxes,
         fontsize=9, fontfamily="monospace",
         verticalalignment="top", horizontalalignment="right",
         bbox=dict(boxstyle="round", facecolor="wheat", alpha=0.8)
     )
 
+    # --- Bottom subplot: Snake Length ---
+    ax2.plot(generations, avg_lengths, linewidth=2, label="avg length", color="seagreen")
+    ax2.fill_between(generations, worst_lengths, best_lengths, alpha=0.25, color="seagreen", label="best/worst band")
+    ax2.set_xlabel("Generation", fontsize=12)
+    ax2.set_ylabel("Snake length (tiles)", fontsize=12)
+    ax2.set_title(f"{exp_name} — Snake Length over Generations", fontsize=14, fontweight="bold")
+    ax2.legend(loc="lower right", fontsize=10)
+    ax2.grid(True, alpha=0.3)
+
     plt.tight_layout()
     fig.savefig(plot_path, dpi=150)
     plt.close(fig)
+
+def load_previous_weights(weight_path: str) -> tuple[list[float], str | None]:
+    """Load a genome from a previously saved weights CSV.
+
+    Accepts either a bare filename (legacy: looked up in weights/) or a full/relative path.
+
+    Returns
+    -------
+    (genome, nn_class_name)
+        nn_class_name is the class name string if stored in the file, else None.
+    """
+    genome: list[float] = []
+    nn_class_name: str | None = None
+    if not os.path.isabs(weight_path) and not os.path.exists(weight_path):
+        weight_path = os.path.join("weights", weight_path)
+    with open(weight_path, "r", newline="") as f:
+        reader = csv.DictReader(f)
+        for row in reader:
+            genome.append(float(row["weight"]))
+            if nn_class_name is None and "nn_class" in row:
+                nn_class_name = row["nn_class"]
+    print(f"[load_previous_weights] Loaded {len(genome)} weights from {weight_path}"
+          + (f" (nn_class={nn_class_name})" if nn_class_name else ""))
+    return genome, nn_class_name
 
 
 def run_experiments(
@@ -342,10 +521,16 @@ def run_experiments(
 
 
 if __name__ == "__main__":
-    import sys
-
+    time = datetime.now()
     if "--sweep" in sys.argv:
         run_experiments()
+    # --prev-weights "weight_csv.path" "config_path" "{experiment_name}"
+    elif "--prev-weights" in sys.argv:
+        idx = sys.argv.index("--prev-weights")
+        weight_path = sys.argv[idx + 1]
+        config_path = sys.argv[idx + 2] if len(sys.argv) > idx + 2 else "config.json"
+        exp_name    = sys.argv[idx + 3] if len(sys.argv) > idx + 3 else f"experiment_{time.strftime("%Y-%m-%d_%H:%M:%S:")}"
+        resume_training(weight_path, config_path, exp_name)
     else:
         csv_path = "results/default_results.csv"
         os.makedirs(GRAPHS_DIR, exist_ok=True)
