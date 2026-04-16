@@ -18,12 +18,10 @@ from datetime import datetime
 
 GENOME_LENGTH = Two_Layer_Neural_Network.genome_length(N_FEATURES)  # switch based on which nn class u r using
 
-#could be moved into config.json?
-
 POPULATION_SIZE = 25       # number of genomes per generation
 NUM_GENERATIONS = 30       # how many generations to run
 MUTATION_RATE = 0.15        # probability of mutating each gene
-MUTATION_STRENGTH = 0.25    # how much a mutated gene shifts (±)
+MUTATION_STRENGTH = 0.25    # how much a mutated gene shifts
 CROSSOVER_RATE = 0.8       # probability of doing crossover vs. cloning
 ELITISM_COUNT = 3         # top N genomes carried unchanged to next gen
 GAMES_PER_GENOME = 5       # run multiple games per generation and average fitness for stability
