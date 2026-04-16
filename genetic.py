@@ -18,8 +18,6 @@ from datetime import datetime
 
 GENOME_LENGTH = Two_Layer_Neural_Network.genome_length(N_FEATURES)  # switch based on which nn class u r using
 
-#could be moved into config.json?
-
 POPULATION_SIZE = 20       # number of genomes per generation
 NUM_GENERATIONS = 1000       # how many generations to run
 MUTATION_RATE = 0.1        # probability of mutating each gene
